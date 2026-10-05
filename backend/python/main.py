@@ -20,6 +20,7 @@ from fabric.registry.fastapi_security import build_security_router
 from fabric.registry.fastapi_mega import build_mega_router
 from fabric.registry.fastapi_secrets import build_secrets_router
 from fabric.registry.fastapi_audit import router as audit_router
+from fabric.registry.fastapi_approval import router as approval_router
 from fabric.registry.fastapi_tenant import router as tenant_router
 from fabric.registry.fastapi_rate_limit import router as rate_router
 
@@ -112,6 +113,7 @@ app.include_router(build_secrets_router())
 app.include_router(rate_router)
 app.include_router(tenant_router)
 app.include_router(audit_router)
+app.include_router(approval_router)
 
 
 async def _recall_context(message: str, user_id: str) -> str:
