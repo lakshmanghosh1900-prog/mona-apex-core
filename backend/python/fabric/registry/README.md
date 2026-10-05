@@ -198,3 +198,61 @@ curl "http://localhost:8000/tools/browser.open/execute?url=https://example.com"
 ## Next stage
 
 **Stage 1.4 — Research Engine** (Search → Collect → Cross-check → Evidence → Answer).
+
+---
+
+# Phase 2 — Stage 2.1: Authentication + RBAC + Policy Engine
+
+**Canonical Spec:** MONA — Powered by Apex Core
+
+Phase 2 is **REQUIRED BEFORE PUBLIC PRODUCTION**. Stage 2.1 delivers the auth
+and governance spine: who is calling (auth), what they may do (RBAC), and whether
+an action may run now (policy).
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `auth.py` | HMAC-SHA256 signed tokens (`/auth/token`, `/auth/whoami`), role hierarchy `User < Operator < Admin < Owner`, no paid provider |
+| `policy_engine.py` | `PolicyEngine.evaluate()` → `ALLOW` / `REQUIRE_APPROVAL` / `DENY` over Stage 1.2 enforcement |
+| `fastapi_security.py` | `/auth/token`, `/auth/whoami`, `/policy/evaluate`, `/phase2/stage2.1/verify` |
+| `test_security.py` | 17 tests: roundtrip, tamper, expiry, escalation, policy decisions |
+
+## How it works (0-cost)
+
+- **Auth:** stdlib `hmac` + `hashlib` + `base64`. Secret from `AUTH_SECRET`; unset → ephemeral random secret (tokens die on restart, safe dev default).
+- **RBAC:** `User(1) < Operator(2) < Admin(3) < Owner(4)`; `can_escalate()` prevents privilege escalation.
+- **Policy:** role gate → quota/budget gate → risk gate. `HIGH` risk or sensitive intent (`delete`, `drop`, `deploy`…) → `REQUIRE_APPROVAL`; `LOW` → `ALLOW`; unknown tool/role or failed gate → `DENY`.
+- **Pre-approved:** an already-approved HIGH action can be forced `ALLOW` (ties to the Telegram gate).
+
+## Commands (from `backend/python/`)
+
+```bash
+python -m pytest fabric/registry/test_security.py -v
+
+curl http://localhost:8000/phase2/stage2.1/verify
+curl -X POST http://localhost:8000/auth/token -H "Content-Type: application/json" \
+     -d '{"subject":"mona","role":"Admin","ttl_seconds":300}'
+curl http://localhost:8000/auth/whoami -H "Authorization: Bearer <token>"
+curl -X POST http://localhost:8000/policy/evaluate -H "Content-Type: application/json" \
+     -d '{"tool_name":"email.send","role":"User"}'
+```
+
+## Verification Criteria (Stage 2.1 Done)
+
+- [x] token issue + verify roundtrip
+- [x] tampered / forged / malformed tokens rejected
+- [x] expired token rejected
+- [x] role escalation blocked
+- [x] `browser.search` + `User` → `ALLOW`
+- [x] `email.send` + `Admin` → `REQUIRE_APPROVAL`; + `User` → `DENY`
+- [x] unknown tool/role → `DENY`
+- [x] sensitive intent escalates risk
+- [x] `/phase2/stage2.1/verify` → `✅ COMPLETE` (14/14)
+- [x] zero-cost: no paid auth provider
+
+## Next stage
+
+**Stage 2.2 — Approval Gateway integration** (wire `PolicyEngine` decisions into
+the orchestrator so every mutating tool call goes through the approval gate,
+plus audit trail).
