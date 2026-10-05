@@ -42,6 +42,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[PermissionLevel]] = {
     "User": frozenset({PermissionLevel.READ, PermissionLevel.WRITE}),
     "Operator": frozenset({PermissionLevel.READ, PermissionLevel.WRITE, PermissionLevel.EXECUTE}),
     "Admin": frozenset(set(PermissionLevel)),
+    "Owner": frozenset(set(PermissionLevel)),
 }
 
 

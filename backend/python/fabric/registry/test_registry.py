@@ -90,7 +90,7 @@ def test_check_permission_rbac_matrix(registry):
     assert registry.check_permission("email.send", "Operator") is False
     assert registry.check_permission("email.send", "Nobody") is False
     assert registry.check_permission("does.not_exist", "Admin") is False
-    assert set(ROLE_PERMISSIONS) == {"User", "Operator", "Admin"}
+    assert set(ROLE_PERMISSIONS) == {"User", "Operator", "Admin", "Owner"}
 
 
 def test_requires_approval_email_send_not_browser_search(registry):

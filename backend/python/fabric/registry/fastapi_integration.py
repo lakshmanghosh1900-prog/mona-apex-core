@@ -4,9 +4,17 @@ from typing import Any, Callable
 
 from fastapi import APIRouter, HTTPException, Query
 
+from fabric.registry.budget_manager import BudgetManager
+from fabric.registry.permission_enforcer import (
+    TOOL_METADATA_REGISTRY,
+    get_enforcer,
+    validate_metadata,
+    validate_registry_consistency,
+)
 from fabric.registry.registry_loader import ROLE_PERMISSIONS, RegistryError, get_registry, validate
 
 VERIFY_PATH = "/phase1/stage1.1/verify"
+VERIFY_12_PATH = "/phase1/stage1.2/verify"
 CANONICAL_SPEC_FALLBACK = "MONA — Powered by Apex Core"
 
 
@@ -51,6 +59,46 @@ def build_verify_payload() -> dict[str, Any]:
     }
 
 
+def build_stage12_verify_payload() -> dict[str, Any]:
+    registry = get_registry()
+    enforcer = get_enforcer()
+    metadata = TOOL_METADATA_REGISTRY
+    problems = validate_metadata() + validate_registry_consistency()
+
+    def _cost_zero() -> bool:
+        return all(e["cost"] == 0.0 and e["cost_per_1000"] == 0.0 for e in metadata.values())
+
+    checks = {
+        "metadata_has_8_tools": len(metadata) >= 8,
+        "timeout_defined": metadata.get("code.run", {}).get("timeout") == 60
+        and metadata.get("browser.search", {}).get("timeout") == 30,
+        "retry_defined": metadata.get("browser.search", {}).get("retry_max") == 3
+        and metadata.get("browser.search", {}).get("retry_backoff", {}).get("strategy") == "exponential",
+        "cost_zero_all_tools": _cost_zero(),
+        "high_risk_requires_approval": metadata.get("email.send", {}).get("requires_approval") is True
+        and registry.requires_approval("email.send"),
+        "low_risk_no_approval": metadata.get("browser.search", {}).get("requires_approval") is False
+        and not registry.requires_approval("browser.search"),
+        "quota_defined": metadata.get("browser.search", {}).get("quota_per_hour") == 100,
+        "budget_manager_zero_cost": BudgetManager().zero_cost and enforcer.budget.zero_cost,
+    }
+    complete = all(checks.values()) and not problems
+    return {
+        "stage": "Phase 1 Stage 1.2 - Tool Permission Metadata",
+        "status": "✅ COMPLETE" if complete else "❌ INCOMPLETE",
+        "canonical_spec": registry.canonical_spec,
+        "dod_ref": registry.dod_ref,
+        "all_checks": complete,
+        "checks": checks,
+        "problems": problems,
+        "tools_with_metadata": len(metadata),
+        "enforcement": {
+            "email.send": enforcer.check("email.send", role="User"),
+            "browser.search": enforcer.check("browser.search", role="User"),
+        },
+    }
+
+
 def build_router(mesh_specs: Callable[[], list[dict[str, Any]]] | None = None) -> APIRouter:
     router = APIRouter()
     mesh_source = mesh_specs or (lambda: [])
@@ -72,6 +120,32 @@ def build_router(mesh_specs: Callable[[], list[dict[str, Any]]] | None = None) -
             raise HTTPException(status_code=404, detail=f"unknown tool: {tool_name}")
         return registry.describe(tool_name, role=role)
 
+    @router.get("/tools/{tool_name}/metadata")
+    async def tool_metadata(tool_name: str) -> dict[str, Any]:
+        enforcer = get_enforcer()
+        try:
+            entry = enforcer.metadata(tool_name)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
+        return {
+            "canonical_spec": get_registry().canonical_spec,
+            "stage": "Phase 1 Stage 1.2 - Tool Permission Metadata",
+            "tool_name": tool_name,
+            "metadata": entry,
+            "retry_policy": enforcer.get_retry_policy(tool_name),
+            "timeout": enforcer.get_timeout(tool_name),
+        }
+
+    @router.get("/tools/{tool_name}/check-detailed")
+    async def check_tool_detailed(
+        tool_name: str,
+        role: str = Query(default="User", description="RBAC role: User | Operator | Admin | Owner"),
+    ) -> dict[str, Any]:
+        try:
+            return get_enforcer().check(tool_name, role=role)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
+
     @router.get("/tools/{tool_name}")
     async def get_tool(tool_name: str) -> dict[str, Any]:
         registry = get_registry()
@@ -89,6 +163,13 @@ def build_router(mesh_specs: Callable[[], list[dict[str, Any]]] | None = None) -
     async def verify_stage_1_1() -> dict[str, Any]:
         try:
             return build_verify_payload()
+        except RegistryError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @router.get(VERIFY_12_PATH)
+    async def verify_stage_1_2() -> dict[str, Any]:
+        try:
+            return build_stage12_verify_payload()
         except RegistryError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
