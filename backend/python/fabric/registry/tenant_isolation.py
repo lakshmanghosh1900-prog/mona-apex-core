@@ -16,49 +16,6 @@ CANONICAL_SPEC = "MONA - Powered by Apex Core"
 DOD_REF = "Understand->Plan->Select Model->Select Tool->Check Permission->Approval->Execute in Sandbox->Observe->Verify->Self-Heal->Evidence->Memory->Report->Resume Later"
 
 
-class _AuditBridge:
-    """Bridges fabric.registry.audit_trail.AuditLog to the log()/get_trail() shape."""
-
-    def __init__(self, log: Any) -> None:
-        self._log = log
-
-    def log(
-        self,
-        action: str,
-        actor: str,
-        role: str,
-        context: Dict[str, Any],
-        result: Dict[str, Any],
-        approved: bool = True,
-        policy_decision: str = "ALLOW",
-    ) -> None:
-        try:
-            self._log.record(
-                action=action,
-                actor=actor,
-                role=role,
-                resource=str((context or {}).get("tenant_id", "")),
-                decision="ALLOW" if approved else "DENY",
-                detail={"context": context or {}, "result": result or {}, "policy_decision": policy_decision},
-            )
-        except Exception:
-            pass  # audit must never break the caller
-
-    def get_trail(self, tool_name: str = "", limit: int = 50) -> Dict[str, Any]:
-        try:
-            entries = list(self._log.entries(limit=None))
-            if tool_name:
-                entries = [e for e in entries if str(e.get("action", "")).startswith(tool_name)]
-            return {
-                "count": len(entries),
-                "entries": entries[-limit:] if limit else entries,
-                "limit": limit,
-                "tool_name": tool_name,
-            }
-        except Exception:
-            return {"count": 0, "entries": [], "limit": limit, "tool_name": tool_name}
-
-
 class TenantIsolationManager:
     def __init__(self) -> None:
         self.tenants: Dict[str, Dict] = {}  # tenant_id -> {created_by, created_at, actors: set}
@@ -66,18 +23,14 @@ class TenantIsolationManager:
         self._audit: Optional[Any] = None
 
     def _get_audit(self) -> Optional[Any]:
+        # Single canonical audit engine: fabric.registry.audit_logger.
         if self._audit is None:
             try:
                 from fabric.registry.audit_logger import get_audit_logger
 
                 self._audit = get_audit_logger()
             except Exception:
-                try:
-                    from fabric.registry.audit_trail import get_audit_log  # type: ignore
-
-                    self._audit = _AuditBridge(get_audit_log())
-                except Exception:
-                    self._audit = None
+                self._audit = None
         return self._audit
 
     def _sanitize_tenant_id(self, tenant_id: str) -> bool:

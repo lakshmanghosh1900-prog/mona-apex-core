@@ -68,7 +68,7 @@ class ExecutionSandbox:
             if not iso.get("allowed"):
                 result = {"success": False, "reason": iso.get("reason"), "allowed": False, "canonical_spec": "MONA - Powered by Apex Core", "isolated": True}
                 if audit:
-                    audit.log("execution.block", actor, "User", {"code": code[:100]}, result, approved=False, policy_decision="DENY")
+                    audit.log("execution.block", actor, "User", {"code": code[:100], "tenant_id": tenant_id}, result, approved=False, policy_decision="DENY")
                 return result
         except Exception:
             pass  # if tenant manager not present, continue
@@ -81,7 +81,7 @@ class ExecutionSandbox:
             if not rl_check.get("allowed"):
                 result = {"success": False, "reason": rl_check.get("reason"), "allowed": False, "canonical_spec": "MONA - Powered by Apex Core"}
                 if audit:
-                    audit.log("execution.rate_limited", actor, "User", {"code": code[:100]}, result, approved=False, policy_decision="DENY")
+                    audit.log("execution.rate_limited", actor, "User", {"code": code[:100], "tenant_id": tenant_id}, result, approved=False, policy_decision="DENY")
                 return result
         except Exception:
             pass
@@ -91,7 +91,7 @@ class ExecutionSandbox:
         if not sanit.get("allowed"):
             result = {"success": False, "reason": sanit.get("reason"), "allowed": False, "canonical_spec": "MONA - Powered by Apex Core", "dod_ref": "Understand->Plan->Select Model->Select Tool->Check Permission->Approval->Execute in Sandbox->Observe->Verify->Self-Heal->Evidence->Memory->Report->Resume Later"}
             if audit:
-                audit.log("execution.sanitize_block", actor, "User", {"code": code[:100]}, result, approved=False, policy_decision="DENY")
+                audit.log("execution.sanitize_block", actor, "User", {"code": code[:100], "tenant_id": tenant_id}, result, approved=False, policy_decision="DENY")
             return result
 
         # Execute in restricted environment
@@ -117,7 +117,7 @@ class ExecutionSandbox:
             if elapsed > timeout:
                 result = {"success": False, "reason": f"Timeout after {elapsed:.2f}s > {timeout}s", "allowed": False, "elapsed": elapsed, "canonical_spec": "MONA - Powered by Apex Core"}
                 if audit:
-                    audit.log("execution.timeout", actor, "User", {"code": code[:100]}, result, approved=False, policy_decision="DENY")
+                    audit.log("execution.timeout", actor, "User", {"code": code[:100], "tenant_id": tenant_id}, result, approved=False, policy_decision="DENY")
                 return result
 
             output = output_buffer.getvalue()
@@ -136,8 +136,14 @@ class ExecutionSandbox:
                 "allowed": True
             }
             self.exec_history.append({"code": code[:200], "actor": actor, "tenant": tenant_id, "success": True, "time": start})
+            try:
+                from fabric.registry.rate_limiter import get_rate_limiter
+
+                get_rate_limiter().record_request(actor, "code.execute", tenant_id)
+            except Exception:
+                pass
             if audit:
-                audit.log("execution.success", actor, "User", {"code": code[:100]}, result, approved=True, policy_decision="ALLOW")
+                audit.log("execution.success", actor, "User", {"code": code[:100], "tenant_id": tenant_id}, result, approved=True, policy_decision="ALLOW")
             return result
         except Exception as e:
             elapsed = time.time() - start
@@ -157,33 +163,103 @@ class ExecutionSandbox:
             }
             self.exec_history.append({"code": code[:200], "actor": actor, "tenant": tenant_id, "success": False, "time": start})
             if audit:
-                audit.log("execution.error", actor, "User", {"code": code[:100]}, result, approved=False, policy_decision="ALLOW")
+                audit.log("execution.error", actor, "User", {"code": code[:100], "tenant_id": tenant_id}, result, approved=False, policy_decision="ALLOW")
             return result
 
-    def invoke_tool(self, tool_name: str, params: Dict, actor: str = "system", tenant_id: str = "default") -> Dict:
-        if tool_name not in self.tool_registry:
-            return {"success": False, "reason": f"Tool {tool_name} not registered", "canonical_spec": "MONA - Powered by Apex Core"}
+    def invoke_tool(self, tool_name: str, params: Dict, actor: str = "system", tenant_id: str = "default", role: str = "User", approved: bool = False) -> Dict:
+        audit = self._get_audit()
+        spec = "MONA - Powered by Apex Core"
+        in_sandbox = tool_name in self.tool_registry
 
-        # Check rate limit
+        # Fail-closed: only tools present in the governed registry may be executed.
+        # A sandbox-only tool (e.g. telegram.send) would otherwise bypass the
+        # PolicyEngine and the approval gate entirely.
+        try:
+            from fabric.registry.registry_loader import get_registry
+
+            governed = tool_name in get_registry()
+        except Exception:
+            governed = False
+
+        if not governed:
+            if in_sandbox:
+                result = {
+                    "success": False,
+                    "allowed": False,
+                    "decision": "DENY",
+                    "stage": "governed_registry",
+                    "reason": f"Tool {tool_name} is not in the governed registry - policy bypass blocked",
+                    "tenant_id": tenant_id,
+                    "canonical_spec": spec,
+                }
+                if audit:
+                    audit.log(
+                        "tool.block",
+                        actor,
+                        role,
+                        {"tool": tool_name, "tenant_id": tenant_id, "params": params},
+                        result,
+                        approved=False,
+                        policy_decision="DENY",
+                    )
+                return result
+            return {"success": False, "reason": f"Tool {tool_name} not registered", "tenant_id": tenant_id, "canonical_spec": spec}
+
+        # Mandatory gate: tenant isolation -> policy engine -> approval -> audit
+        try:
+            from fabric.registry.orchestrator_guard import get_orchestrator_guard
+
+            gate = get_orchestrator_guard().guard(
+                tool_name,
+                params,
+                actor=actor,
+                role=role,
+                tenant_id=tenant_id,
+                resource=tool_name,
+                approved=approved,
+            )
+        except Exception as exc:  # noqa: BLE001
+            gate = {"allowed": False, "decision": "DENY", "stage": "guard", "reason": f"guard unavailable: {exc}"}
+
+        if not gate.get("allowed"):
+            return {
+                "success": False,
+                "allowed": False,
+                "decision": gate.get("decision", "DENY"),
+                "stage": gate.get("stage", "policy"),
+                "reason": gate.get("reason", "blocked by approval gateway"),
+                "is_mutating": gate.get("is_mutating"),
+                "tenant_id": tenant_id,
+                "canonical_spec": spec,
+            }
+
+        if not in_sandbox:
+            return {"success": False, "reason": f"Tool {tool_name} not registered", "tenant_id": tenant_id, "canonical_spec": spec}
+
+        # Rate limit
         try:
             from fabric.registry.rate_limiter import get_rate_limiter
             rl = get_rate_limiter()
             chk = rl.check_rate_limit(actor, tool_name, tenant_id)
             if not chk.get("allowed"):
-                return {"success": False, "reason": chk.get("reason"), "canonical_spec": "MONA - Powered by Apex Core"}
+                return {"success": False, "reason": chk.get("reason"), "tenant_id": tenant_id, "canonical_spec": spec}
             rl.record_request(actor, tool_name, tenant_id)
-        except:
+        except Exception:
             pass
 
         tool_info = self.tool_registry[tool_name]
         return {
             "success": True,
+            "allowed": True,
+            "decision": gate.get("decision", "ALLOW"),
+            "stage": gate.get("stage", "complete"),
             "tool": tool_name,
             "params": params,
             "info": tool_info,
             "actor": actor,
+            "role": role,
             "tenant_id": tenant_id,
-            "canonical_spec": "MONA - Powered by Apex Core",
+            "canonical_spec": spec,
             "zero_cost": True
         }
 

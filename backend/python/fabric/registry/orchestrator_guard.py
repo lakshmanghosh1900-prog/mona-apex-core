@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 from typing import Any
 
-CANONICAL_SPEC = "MONA — Powered by Apex Core"
+CANONICAL_SPEC = "MONA - Powered by Apex Core"
 DOD_REF = (
     "Understand->Plan->Select Model->Select Tool->Check Permission->Approval->"
     "Execute in Sandbox->Observe->Verify->Self-Heal->Evidence->Memory->Report->Resume Later"
@@ -84,7 +84,16 @@ class OrchestratorGuard:
             return True
         return any(marker in tool_name for marker in ("write", "delete", "send", "run", "mutate"))
 
-    def _audit_record(self, action: str, actor: str, role: str, resource: str, decision: str, detail: dict[str, Any]) -> None:
+    def _audit_record(
+        self,
+        action: str,
+        actor: str,
+        role: str,
+        resource: str,
+        decision: str,
+        detail: dict[str, Any],
+        tenant_id: str = "",
+    ) -> None:
         audit = self._get_audit()
         if audit is None:
             return
@@ -93,8 +102,8 @@ class OrchestratorGuard:
                 action,
                 actor,
                 role,
-                {"resource": resource, **detail},
-                {"allowed": decision == "ALLOW", "success": decision == "ALLOW", "resource": resource},
+                {"resource": resource, "tenant_id": tenant_id, **detail},
+                {"allowed": decision == "ALLOW", "success": decision == "ALLOW", "resource": resource, "tenant_id": tenant_id},
                 approved=decision in ("ALLOW", "REQUIRE_APPROVAL"),
                 policy_decision=decision,
             )
@@ -144,7 +153,7 @@ class OrchestratorGuard:
                             "stage": "tenant_isolation",
                         }
                     )
-                    self._audit_record(f"guard.{tool_name}", actor, role, resource, "DENY", {"stage": "tenant_isolation", "reason": base["reason"]})
+                    self._audit_record(f"guard.{tool_name}", actor, role, resource, "DENY", {"stage": "tenant_isolation", "reason": base["reason"]}, tenant_id=tenant_id)
                     return base
             except Exception as exc:  # noqa: BLE001
                 base["tenant_error"] = f"{type(exc).__name__}: {exc}"
@@ -166,7 +175,7 @@ class OrchestratorGuard:
 
         if policy_decision == "DENY":
             base.update({"allowed": False, "decision": "DENY", "reason": "; ".join(reasons) or "policy DENY", "stage": "policy", "risk": getattr(decision_obj, "risk", "UNKNOWN")})
-            self._audit_record(f"guard.{tool_name}", actor, role, resource, "DENY", {"stage": "policy", "reasons": reasons})
+            self._audit_record(f"guard.{tool_name}", actor, role, resource, "DENY", {"stage": "policy", "reasons": reasons}, tenant_id=tenant_id)
             return base
 
         if policy_decision == "REQUIRE_APPROVAL":
@@ -181,11 +190,11 @@ class OrchestratorGuard:
                     "hint": "call guard_async() to await the human gate, or pass approved=True",
                 }
             )
-            self._audit_record(f"guard.{tool_name}", actor, role, resource, "REQUIRE_APPROVAL", {"stage": "approval", "mutating": mutating})
+            self._audit_record(f"guard.{tool_name}", actor, role, resource, "REQUIRE_APPROVAL", {"stage": "approval", "mutating": mutating}, tenant_id=tenant_id)
             return base
 
         base.update({"allowed": True, "decision": "ALLOW", "reason": "; ".join(reasons) or "policy ALLOW", "stage": "complete", "risk": getattr(decision_obj, "risk", "LOW")})
-        self._audit_record(f"guard.{tool_name}", actor, role, resource, "ALLOW", {"stage": "complete", "mutating": mutating})
+        self._audit_record(f"guard.{tool_name}", actor, role, resource, "ALLOW", {"stage": "complete", "mutating": mutating}, tenant_id=tenant_id)
         return base
 
     async def guard_async(
@@ -221,7 +230,7 @@ class OrchestratorGuard:
             return final
 
         pre.update({"allowed": False, "decision": "DENY", "reason": "human denied via approval gate", "stage": "approval"})
-        self._audit_record(f"guard.{tool_name}", actor, role, resource or tool_name, "DENY", {"stage": "approval", "human": "denied"})
+        self._audit_record(f"guard.{tool_name}", actor, role, resource or tool_name, "DENY", {"stage": "approval", "human": "denied"}, tenant_id=tenant_id)
         return pre
 
     # ---------- stats ----------

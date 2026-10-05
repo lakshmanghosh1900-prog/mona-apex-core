@@ -233,10 +233,25 @@ def build_phase2_security_mega_payload() -> dict[str, Any]:
     results["2.2"] = ok22
     results["2.3"] = ok23
 
+    # 2.7 Rate limiting & quota (fresh actor/tenant so the probe cannot trip a real bucket)
+    try:
+        from fabric.registry.rate_limiter import get_rate_limiter
+
+        rl = get_rate_limiter()
+        check = rl.check_rate_limit("mega_rate_user", "browser.search", "mega_rate_tenant")
+        rstats = rl.get_stats()
+        ok27 = check.get("allowed") is True and isinstance(rstats.get("total_buckets"), int)
+        details["2.7"] = {"allowed": check.get("allowed"), "buckets": rstats.get("total_buckets")}
+    except Exception as e:
+        ok27 = False
+        details["2.7"] = str(e)
+
+    results["2.7"] = bool(ok27)
+
     all_ok = all(results.values())
     failed = [k for k, v in results.items() if not v]
     return {
-        "phase": "Phase 2 - Security & Governance - MEGA 2.1-2.6",
+        "phase": "Phase 2 - Security & Governance - MEGA 2.1-2.7",
         "stage": "Phase 2 Mega Verification",
         "status": "✅ COMPLETE" if all_ok else f"❌ INCOMPLETE failed {failed}",
         "all_checks": all_ok,

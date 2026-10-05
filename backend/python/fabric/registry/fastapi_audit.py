@@ -119,43 +119,8 @@ def verify_chain():
     except Exception as ex:
         return {"valid": False, "error": str(ex)}
 
-@router.get("/phase2/mega/verify")
-async def verify_phase2_mega():
-    results = {}
-    details = {}
-    try:
-        from fabric.registry.secrets_manager import get_secrets_manager
-        sm = get_secrets_manager()
-        managed = len(sm.keys)
-        findings = sm.scan_hardcoded()
-        scan_clean = len(findings) == 0
-        results["2.4"] = managed >= 7 and scan_clean
-        details["2.4"] = {"keys": managed, "scan_clean": scan_clean}
-    except Exception as e:
-        results["2.4"] = False
-        details["2.4"] = str(e)
+# NOTE: /phase2/mega/verify is owned by fabric.registry.fastapi_tenant
+# (build_phase2_security_mega_payload, stages 2.1-2.7). Defining a second copy of
+# that path here would be shadowed by router registration order and drift from the
+# canonical payload, so it is intentionally not registered twice.
 
-    try:
-        from fabric.registry.audit_logger import get_audit_logger
-        audit = get_audit_logger()
-        audit.log("test.mega", "mega_test", "User", {"q": "test"}, {"success": True})
-        trail = audit.get_trail()
-        chain_v = audit.chain.verify_chain()
-        results["2.5"] = trail.get("count",0) >= 1 and chain_v.get("valid") == True
-        details["2.5"] = {"trail": trail.get("count"), "chain_valid": chain_v.get("valid"), "chain_len": chain_v.get("length")}
-    except Exception as e:
-        results["2.5"] = False
-        details["2.5"] = str(e)
-
-    all_ok = all(results.values())
-    return {
-        "phase": "Phase 2 — Security & Governance — MEGA",
-        "status": "✅ PHASE 2 PARTIAL 2.4-2.5 COMPLETE" if all_ok else f"❌ INCOMPLETE failed {[k for k,v in results.items() if not v]}",
-        "all_checks": all_ok,
-        "stages": results,
-        "details": details,
-        "passed": sum(1 for v in results.values() if v),
-        "total": len(results),
-        "canonical_spec": "MONA - Powered by Apex Core",
-        "next": "Phase 2.6 Tenant Isolation"
-    }

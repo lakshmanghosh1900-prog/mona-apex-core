@@ -148,62 +148,6 @@ def rate_stats():
     except Exception as e:
         return {"error": str(e)}
 
-@router.get("/phase2/mega/verify")
-async def verify_phase2_mega():
-    results = {}
-    details = {}
-    try:
-        from fabric.registry.secrets_manager import get_secrets_manager
-        sm = get_secrets_manager()
-        managed = len(sm.keys)
-        scan_clean = len(sm.scan_hardcoded()) == 0
-        results["2.4"] = managed >= 7 and scan_clean
-        details["2.4"] = {"keys": managed, "scan_clean": scan_clean}
-    except Exception as e:
-        results["2.4"] = False
-        details["2.4"] = str(e)
-    try:
-        from fabric.registry.audit_logger import get_audit_logger
-        audit = get_audit_logger()
-        audit.log("test.mega", "mega_test", "User", {"q": "test"}, {"success": True})
-        trail = audit.get_trail()
-        chain_v = audit.chain.verify_chain()
-        results["2.5"] = trail.get("count",0) >= 1 and chain_v.get("valid") == True
-        details["2.5"] = {"trail": trail.get("count"), "chain_valid": chain_v.get("valid")}
-    except Exception as e:
-        results["2.5"] = False
-        details["2.5"] = str(e)
-    try:
-        from fabric.registry.tenant_isolation import get_tenant_manager
-        tm = get_tenant_manager()
-        tm.create_tenant_workspace("mega_test_tenant", "mega_test", "User")
-        stats = tm.get_stats()
-        results["2.6"] = stats.get("total_tenants",0) >= 1
-        details["2.6"] = {"tenants": stats.get("total_tenants")}
-    except Exception as e:
-        results["2.6"] = False
-        details["2.6"] = str(e)
-    try:
-        from fabric.registry.rate_limiter import get_rate_limiter
-        rl = get_rate_limiter()
-        rl.reset()
-        check = rl.check_rate_limit("mega_test", "browser.search", "mega_test_tenant")
-        stats = rl.get_stats()
-        results["2.7"] = check.get("allowed") == True and stats.get("total_buckets",0) >= 0
-        details["2.7"] = {"allowed": check.get("allowed"), "buckets": stats.get("total_buckets")}
-    except Exception as e:
-        results["2.7"] = False
-        details["2.7"] = str(e)
-
-    all_ok = all(results.values())
-    return {
-        "phase": "Phase 2 — Security & Governance — MEGA 2.4-2.7",
-        "status": "✅ PHASE 2 SECURITY COMPLETE" if all_ok else f"❌ INCOMPLETE failed {[k for k,v in results.items() if not v]}",
-        "all_checks": all_ok,
-        "stages": results,
-        "details": details,
-        "passed": sum(1 for v in results.values() if v),
-        "total": len(results),
-        "canonical_spec": "MONA - Powered by Apex Core",
-        "next": "Phase 3 — Execution Fabric" if all_ok else "Fix failed stages"
-    }
+# NOTE: /phase2/mega/verify is owned by fastapi_tenant.build_phase2_security_mega_payload (stages 2.1-2.7).
+# A second copy of this path here was shadowed by router registration order, so it is
+# intentionally not registered twice.
