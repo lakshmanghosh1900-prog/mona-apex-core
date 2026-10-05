@@ -24,6 +24,7 @@ from fabric.registry.fastapi_approval import router as approval_router
 from fabric.registry.fastapi_tenant import router as tenant_router
 from fabric.registry.fastapi_rate_limit import router as rate_router
 from fabric.registry.fastapi_execution import router as execution_router
+from fabric.registry.fastapi_tool_registry import router as tool_registry_router
 
 memory = LongTermMemory()
 approval = TelegramApprovalGate()
@@ -106,6 +107,7 @@ async def agents() -> dict[str, Any]:
     return {"agents": [a.__dict__ for a in orchestrator.registry.all()]}
 
 
+app.include_router(tool_registry_router)
 app.include_router(build_router(mesh_specs=orchestrator.mesh.specs))
 app.include_router(build_browser_router())
 app.include_router(build_mega_router())
