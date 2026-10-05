@@ -204,18 +204,49 @@ def build_phase2_security_mega_payload() -> dict[str, Any]:
     results["2.5"] = bool(ok25)
     results["2.6"] = bool(ok26)
 
+    try:
+        from fabric.registry.auth import get_auth_service
+        from fabric.registry.policy_engine import get_policy_engine
+
+        auth = get_auth_service()
+        ctx = auth.verify_token(auth.issue_token("mega", "User", ttl_seconds=60)["token"])
+        ok21 = ctx.role == "User" and get_policy_engine().evaluate("email.send", role="User").decision == "DENY"
+        details["2.1"] = {"role": ctx.role, "token": "roundtrip ok"}
+    except Exception as e:
+        ok21 = False
+        details["2.1"] = str(e)
+
+    try:
+        from fabric.registry.fastapi_approval import build_approval_verify_payload
+
+        p22 = build_approval_verify_payload("2.2")
+        p23 = build_approval_verify_payload("2.3")
+        ok22, ok23 = bool(p22.get("all_checks")), bool(p23.get("all_checks"))
+        details["2.2"] = {"status": p22.get("status"), "passed": p22.get("passed"), "total": p22.get("total")}
+        details["2.3"] = {"status": p23.get("status"), "passed": p23.get("passed"), "total": p23.get("total")}
+    except Exception as e:
+        ok22 = ok23 = False
+        details["2.2"] = str(e)
+        details["2.3"] = str(e)
+
+    results["2.1"] = ok21
+    results["2.2"] = ok22
+    results["2.3"] = ok23
+
     all_ok = all(results.values())
     failed = [k for k, v in results.items() if not v]
     return {
-        "phase": "Phase 2 — Security & Governance — MEGA 2.4-2.6",
-        "status": "✅ PHASE 2 SECURITY COMPLETE" if all_ok else f"❌ INCOMPLETE failed {failed}",
+        "phase": "Phase 2 - Security & Governance - MEGA 2.1-2.6",
+        "stage": "Phase 2 Mega Verification",
+        "status": "✅ COMPLETE" if all_ok else f"❌ INCOMPLETE failed {failed}",
         "all_checks": all_ok,
         "stages": results,
+        "complete": {k: bool(v) for k, v in results.items()},
         "details": details,
         "passed": sum(1 for v in results.values() if v),
         "total": len(results),
         "canonical_spec": CANONICAL_SPEC,
-        "next": "Phase 3 — Execution Fabric" if all_ok else "Fix failed stages",
+        "next": "Phase 3 - Execution Fabric" if all_ok else "Fix failed stages",
     }
 
 

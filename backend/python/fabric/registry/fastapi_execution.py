@@ -45,20 +45,20 @@ def verify_stage_3_1():
         checks.append({"name": name, "passed": bool(passed), "detail": detail, "canonical_spec": CANONICAL_SPEC})
 
     # 1. Safe code executes
-    r1 = sb.execute_python("x=2+2\nprint(x)", actor="u1", tenant_id="t1")
+    r1 = sb.execute_python("x=2+2\nprint(x)", actor="u1", tenant_id="tenant1")
     record("safe_code_executes", r1.get("success") is True and "4" in r1.get("output", ""), {"output": r1.get("output", "")})
 
     # 2. Blocked import
-    r_block = sb.execute_python("import os\nprint('hi')", actor="u1", tenant_id="t1")
+    r_block = sb.execute_python("import os\nprint('hi')", actor="u1", tenant_id="tenant1")
     reason = r_block.get("reason", "")
     record("blocked_import_os", r_block.get("success") is False and ("Blocked" in reason or "blocked" in reason.lower()), {"reason": reason})
 
     # 3. Blocked os.system
-    r_sys = sb.execute_python("import os; os.system('ls')", actor="u1", tenant_id="t1")
+    r_sys = sb.execute_python("import os; os.system('ls')", actor="u1", tenant_id="tenant1")
     record("blocked_os_system", r_sys.get("success") is False, {"reason": r_sys.get("reason", "")})
 
     # 4. Blocked eval
-    r_eval = sb.execute_python("eval('2+2')", actor="u1", tenant_id="t1")
+    r_eval = sb.execute_python("eval('2+2')", actor="u1", tenant_id="tenant1")
     record("blocked_eval", r_eval.get("success") is False, {"reason": r_eval.get("reason", "")})
 
     # 5. EXEC_ROOT exists and matches stats
@@ -76,11 +76,11 @@ def verify_stage_3_1():
     record("rate_limit_reset_execute", r7.get("success") is True, {"output": r7.get("output", "")})
 
     # 8. Tool invoke
-    r8 = sb.invoke_tool("browser.search", {"q": "mona apex"}, actor="test_user", tenant_id="t1")
+    r8 = sb.invoke_tool("browser.search", {"q": "mona apex"}, actor="test_user", tenant_id="tenant1")
     record("tool_invoke_registered", r8.get("success") is True and r8.get("canonical_spec") == CANONICAL_SPEC, {"tool": r8.get("tool")})
 
     # 9. Unknown tool rejected
-    r9 = sb.invoke_tool("unknown.evil", {}, actor="test_user", tenant_id="t1")
+    r9 = sb.invoke_tool("unknown.evil", {}, actor="test_user", tenant_id="tenant1")
     record("tool_unknown_rejected", r9.get("success") is False, {"reason": r9.get("reason", "")})
 
     # 10. Success payload canonical fields (references r1 from check 1)
