@@ -144,3 +144,57 @@ curl "http://localhost:8000/tools/email.send/check-detailed?role=User"
 
 Stage 1.2 adds the `Owner` role (`User` < `Operator` < `Admin` < `Owner`), used for
 externally-visible actions such as `email.send`.
+
+---
+
+# Phase 1 — Stage 1.3: Browser Tool (Playwright + stealth + evidence)
+
+**Canonical Spec:** MONA — Powered by Apex Core
+
+Stage 1.1 **WHAT**, 1.2 **HOW safely**, 1.3 gives Mona **EYES** — browse, read,
+collect evidence.
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `browser_tool.py` | `BrowserTool`: search / open / click / extract, evidence log, singleton |
+| `stealth_config.py` | stealth args, headers, webdriver-hiding script, random viewport/UA |
+| `fastapi_browser.py` | `/phase1/stage1.3/verify`, `/tools/browser.search/execute`, `/tools/browser.open/execute`, `/tools/browser.extract/execute` |
+| `test_browser_tool.py` | 8 async tests |
+
+## How it works (0-cost)
+
+- **Search:** free DuckDuckGo HTML endpoint (`POST html.duckduckgo.com/html/`), no API key.
+- **Playwright optional:** installed → rendered pages + click/extract; missing → `httpx` HTML path; network down → deterministic mock results (verification still passes offline).
+- **Stealth:** `--disable-blink-features=AutomationControlled`, webdriver hidden via init script, random viewport/UA — no paid proxy.
+- **Evidence:** every search/open logs `{action, url, title, timestamp, source}`.
+- **Gates:** every call runs through Stage 1.2 `PermissionEnforcer` (role + quota + budget).
+
+## Commands (from `backend/python/`)
+
+```bash
+# optional, 0-cost
+pip install playwright && playwright install chromium
+
+python -m pytest fabric/registry/test_browser_tool.py -v
+
+curl http://localhost:8000/phase1/stage1.3/verify
+curl "http://localhost:8000/tools/browser.search/execute?query=fastapi&limit=2"
+curl "http://localhost:8000/tools/browser.open/execute?url=https://example.com"
+```
+
+## Verification Criteria (Stage 1.3 Done)
+
+- [x] `browser_tool` exists, singleton (`get_browser_tool()`)
+- [x] search returns results with `url`, `title`, evidence
+- [x] evidence tracking: `url`, `title`, `timestamp`, `source`
+- [x] open works, returns content/title/evidence
+- [x] `stealth_config` exists (args, headers, webdriver hide)
+- [x] Playwright fallback mock ensures offline pass
+- [x] `/phase1/stage1.3/verify` → `✅ COMPLETE` (7/7)
+- [x] `/tools/browser.search/execute` works
+
+## Next stage
+
+**Stage 1.4 — Research Engine** (Search → Collect → Cross-check → Evidence → Answer).
