@@ -39,6 +39,9 @@ def verify_stage_3_1():
     tm = get_tenant_manager()
 
     sb.exec_history.clear()
+    # Executions now consume rate quota, so start the verifier from a clean
+    # bucket set and keep repeated verify runs deterministic.
+    rl.reset()
     checks = []
 
     def record(name: str, passed: bool, detail: Any = ""):
@@ -132,7 +135,16 @@ def execute_python(req: ExecRequest):
 @router.post("/execution/tool")
 def execute_tool(req: ToolRequest):
     sb = get_execution_sandbox()
-    result = sb.invoke_tool(req.tool, req.params, actor=req.actor, tenant_id=req.tenant_id)
+    # role/approved are deliberately NOT accepted from the request body: a caller
+    # must not be able to self-declare Admin or self-approve a HIGH-risk tool.
+    result = sb.invoke_tool(
+        req.tool,
+        req.params,
+        actor=req.actor,
+        tenant_id=req.tenant_id,
+        role="User",
+        approved=False,
+    )
     result["canonical_spec"] = CANONICAL_SPEC
     result["dod_ref"] = DOD_REF
     return result
