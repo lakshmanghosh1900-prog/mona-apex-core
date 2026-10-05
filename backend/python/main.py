@@ -14,6 +14,7 @@ from core.llm import LLMError
 from core.long_term_memory import LongTermMemory
 from core.orchestrator import SelfHealingOrchestrator, describe_error
 from core.telegram_approval import TelegramApprovalGate
+from fabric.registry.fastapi_integration import build_router
 
 memory = LongTermMemory()
 approval = TelegramApprovalGate()
@@ -96,9 +97,7 @@ async def agents() -> dict[str, Any]:
     return {"agents": [a.__dict__ for a in orchestrator.registry.all()]}
 
 
-@app.get("/tools")
-async def tools() -> dict[str, Any]:
-    return {"tools": orchestrator.mesh.specs()}
+app.include_router(build_router(mesh_specs=orchestrator.mesh.specs))
 
 
 async def _recall_context(message: str, user_id: str) -> str:

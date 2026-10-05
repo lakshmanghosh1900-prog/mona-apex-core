@@ -11,8 +11,11 @@ It combines beautiful conversational experience with real autonomous task execut
 - Long-term Memory (Mem0 + Qdrant hybrid)
 - Telegram Human-in-the-Loop Approval Gate
 - Multi-Agent Orchestration (planner / operator / critic / healer)
-- Zero-cost free-tier architecture (Gemini → Groq → Ollama → echo)
+- Zero-cost capable architecture (Gemini → Groq → Ollama → echo)
 - Docker + Vercel ready
+
+Canonical spec: [MONA_POWERED_BY_APEX_FINAL_BLUEPRINT.md](MONA_POWERED_BY_APEX_FINAL_BLUEPRINT.md)
+(10-layer architecture, roadmap phases 0–10, production Definition of Done).
 
 ---
 
@@ -233,5 +236,6 @@ Provider chain: **Gemini → Groq → Ollama → echo** (always ends in a safe, 
 
 ---
 
-Built with ❤️ under Project Apex Enterprise Architecture  
-Zero-cost scalable • Fully autonomous • Production ready
+Built under Project Apex Enterprise Architecture  
+Zero-cost capable • Self-hosted by default • Beta preview (see the [Production Definition of Done](MONA_POWERED_BY_APEX_FINAL_BLUEPRINT.md#production-definition-of-done))  
+License: [MIT](LICENSE)
