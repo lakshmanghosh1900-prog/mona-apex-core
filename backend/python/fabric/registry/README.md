@@ -256,3 +256,67 @@ curl -X POST http://localhost:8000/policy/evaluate -H "Content-Type: application
 **Stage 2.2 — Approval Gateway integration** (wire `PolicyEngine` decisions into
 the orchestrator so every mutating tool call goes through the approval gate,
 plus audit trail).
+
+---
+
+# Phase 2 — Stage 2.4: Secrets Management & Environment Hardening
+
+**Canonical Spec:** MONA — Powered by Apex Core
+
+Stage 2.1 decides **WHO may act**. Stage 2.4 protects the **credentials those
+actions need**: one loader, one mask, one audit scan — no secret ever reaches
+source code, git, or an API response.
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `secrets_manager.py` | `SecretsManager` singleton: `get_secret` / `require_secret` / `mask` / `redact` / `scan_hardcoded` / `git_environment` / `is_secure` |
+| `fastapi_secrets.py` | `/secrets/status`, `/secrets/scan`, `/secrets/mask`, `/phase2/stage2.4/verify` |
+| `test_secrets_manager.py` | 16 tests: masking, roundtrip, redaction, planted-secret scan, git checks, verify payload |
+
+## How it works (0-cost)
+
+- **Loader:** values come from the environment only (`.env` via `core/config.py`,
+  git-ignored). Code never stores a literal credential.
+- **Masking:** every status shows `configured (ends with ...xxxx)` / `configured (short)` /
+  `missing/unconfigured` — the raw value never leaves `get_secret()`/`require_secret()`
+  for internal call sites, and never appears in any API payload.
+- **Redaction:** `redact(text)` scrubs known secret values out of logs/errors before output.
+- **Hardcode scan:** high-confidence patterns (`AIza…`, `ghp_…`, `sk-…`, `xox…`, `AKIA…`,
+  bot tokens, JWT) + `KEY = "…"` assignments, placeholder values (`test`, `dummy`,
+  `your-…`) ignored; `.venv`, `node_modules`, `.git` pruned.
+- **Git guard:** `git ls-files` must not list `.env*` (except `.env.example`), `.gitignore`
+  must cover `.env`, and `.env.example` template must exist.
+- **Managed keys (7):** `GEMINI_API_KEY` · `GROQ_API_KEY` · `TELEGRAM_BOT_TOKEN` ·
+  `SECRET_KEY` · `QDRANT_API_KEY` · `MEM0_API_KEY` · `AUTH_SECRET`
+
+## Commands (from `backend/python/`)
+
+```bash
+python -m pytest fabric/registry/test_secrets_manager.py -v
+
+curl http://localhost:8000/phase2/stage2.4/verify
+curl http://localhost:8000/secrets/status
+curl http://localhost:8000/secrets/scan
+curl "http://localhost:8000/secrets/mask?key=GEMINI_API_KEY"
+```
+
+## Verification Criteria (Stage 2.4 Done)
+
+- [x] singleton `get_secrets_manager()`
+- [x] managed keys cover every key `core/config.py` reads
+- [x] mask format: missing / short / `ends with ...xxxx`
+- [x] env roundtrip via `get_secret()` + `require_secret()` raises on missing
+- [x] no raw value inside any status payload (JSON assertion)
+- [x] `redact()` scrubs known values from log text
+- [x] repository scan finds **0** hardcoded secrets
+- [x] `.env` not tracked by git, covered by `.gitignore`, `.env.example` present
+- [x] unmanaged key request to `/secrets/mask` → `400`
+- [x] `/phase2/stage2.4/verify` → `✅ COMPLETE` (14/14)
+- [x] zero-cost: local env loader, stdlib scan, no secret-vault SaaS
+
+## Next stage
+
+**Stage 2.5 — Audit Trail / Evidence lock** (append-only audit log for every
+secret access, tool call, and approval decision).

@@ -18,6 +18,7 @@ from fabric.registry.fastapi_browser import build_browser_router
 from fabric.registry.fastapi_integration import build_router
 from fabric.registry.fastapi_security import build_security_router
 from fabric.registry.fastapi_mega import build_mega_router
+from fabric.registry.fastapi_secrets import build_secrets_router
 
 memory = LongTermMemory()
 approval = TelegramApprovalGate()
@@ -104,6 +105,7 @@ app.include_router(build_router(mesh_specs=orchestrator.mesh.specs))
 app.include_router(build_browser_router())
 app.include_router(build_mega_router())
 app.include_router(build_security_router())
+app.include_router(build_secrets_router())
 
 
 async def _recall_context(message: str, user_id: str) -> str:
