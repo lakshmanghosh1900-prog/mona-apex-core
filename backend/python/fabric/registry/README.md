@@ -259,6 +259,72 @@ plus audit trail).
 
 ---
 
+# Phase 2 — Stage 2.5: Audit Trail (tamper-evident hash chain)
+
+**Canonical Spec:** MONA — Powered by Apex Core
+
+Production Definition of Done requires *"audit logs are available"*. Stage 2.5
+makes every governance decision **tamper-evident**: each entry stores the previous
+entry's hash plus `sha256(payload)`, so any edit, reorder or deletion breaks the
+chain and is detectable.
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `audit_trail.py` | `AuditLog` — append-only, hash-chained, JSONL persistence, secret redaction |
+| `fastapi_audit.py` | `/audit/stats`, `/audit/chain/verify`, `/audit/log`, `/phase2/stage2.5/verify`, `/phase2/mega/verify` |
+| `test_audit_trail.py` | 13 tests: chain linking, tamper detection, redaction, persistence, thread safety |
+
+## How it works (0-cost)
+
+- **Chain:** entry `n` stores `prev_hash = hash(n-1)`; genesis = 64 zeros. `verify()` walks the chain and reports the first `broken_at` index with a reason.
+- **Tamper evidence:** recomputing `sha256(canonical_json(payload))` detects any field edit.
+- **Redaction:** keys containing `token`, `secret`, `password`, `api_key`, `authorization`, `credential` are stored as `[REDACTED]`, recursively.
+- **Persistence:** append-only JSONL at `AUDIT_FILE`; disk failures never crash the caller; in-memory chain always available.
+- **Thread safety:** appends are locked; 20 concurrent writers still produce a valid chain.
+- **Cost:** stdlib only (`hashlib`, `json`, `threading`).
+
+## Commands (from `backend/python/`)
+
+```bash
+python -m pytest fabric/registry/test_audit_trail.py -v
+
+curl http://localhost:8000/phase2/stage2.5/verify
+curl http://localhost:8000/audit/stats
+curl http://localhost:8000/audit/chain/verify
+curl http://localhost:8000/audit/log
+curl -X POST http://localhost:8000/audit/log -H "Content-Type: application/json" \
+     -d '{"action":"tool.execute","actor":"mona","role":"User","resource":"files.write","decision":"ALLOW"}'
+curl http://localhost:8000/phase2/mega/verify
+```
+
+## Verification Criteria (Stage 2.5 Done)
+
+- [x] audit log exists, appends entries
+- [x] hash chain linked (`prev_hash` = previous `hash`)
+- [x] chain verifies clean
+- [x] tampering detected (payload edit / prev_hash break)
+- [x] secrets redacted in detail payloads
+- [x] index continuity, thread-safe concurrent append
+- [x] Stage 2.1 / 2.4 / 2.5 all COMPLETE under `/phase2/mega/verify`
+- [x] `/phase2/stage2.5/verify` → `✅ COMPLETE` (14/14, failed=0)
+- [x] zero-cost: stdlib only
+
+## Phase 2 status
+
+| Stage | Component | Status |
+|-------|-----------|--------|
+| 2.1 | Authentication + RBAC + Policy Engine | ✅ COMPLETE |
+| 2.4 | Secrets management | ✅ COMPLETE |
+| 2.5 | Audit Trail (hash chain) | ✅ COMPLETE |
+| 2.2 / 2.3 | Approval gate wiring into orchestrator, per-tenant isolation | 🔜 |
+
+Gate for public production also needs **Stage 2.2/2.3** (every mutating tool call
+routed through the approval gate + audit log).
+
+---
+
 # Phase 2 — Stage 2.4: Secrets Management & Environment Hardening
 
 **Canonical Spec:** MONA — Powered by Apex Core

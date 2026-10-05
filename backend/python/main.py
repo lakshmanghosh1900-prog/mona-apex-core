@@ -20,6 +20,7 @@ from fabric.registry.fastapi_security import build_security_router
 from fabric.registry.fastapi_mega import build_mega_router
 from fabric.registry.fastapi_secrets import build_secrets_router
 from fabric.registry.fastapi_audit import router as audit_router
+from fabric.registry.fastapi_tenant import router as tenant_router
 
 memory = LongTermMemory()
 approval = TelegramApprovalGate()
@@ -107,6 +108,7 @@ app.include_router(build_browser_router())
 app.include_router(build_mega_router())
 app.include_router(build_security_router())
 app.include_router(build_secrets_router())
+app.include_router(tenant_router)
 app.include_router(audit_router)
 
 
