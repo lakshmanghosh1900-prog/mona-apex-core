@@ -1,4 +1,4 @@
-import time
+﻿import time
 
 import pytest
 
@@ -291,3 +291,142 @@ def test_hit_rate():
     assert s["hits"] >= 1
     assert s["misses"] >= 1
     assert 0 <= s["hit_rate"] <= 100
+
+
+# ---------- Stage 6.3 - Enterprise Audit Dashboard (14) ----------
+
+
+def test_enterprise_audit_exists():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    assert ent is not None
+    assert get_enterprise_audit() is ent
+
+
+def test_record_enterprise_event():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    r = ent.record_enterprise_event("unit.event", "tester", "ent_tenant", {"k": "v"}, severity="WARN")
+    assert r["success"] == True
+    assert r["event"] == "unit.event"
+    assert r["canonical_spec"] == CANONICAL_SPEC
+    assert any(a["event"] == "unit.event" for a in ent.audits)
+
+
+
+def test_generate_compliance_report():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    r = ent.generate_compliance_report(tenant_id="ent_tenant", actor="tester")
+    assert "report" in r
+    assert "stages" in r
+    assert r["success"] == True
+
+
+def test_compliance_stages_total():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    r = ent.generate_compliance_report(tenant_id="ent_tenant", actor="tester")
+    assert r["total"] >= 14
+    assert r["total"] == len(r["stages"])
+    assert "6.3" in r["stages"]
+    assert r["passed"] == r["total"]
+
+
+def test_get_reports():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    ent.generate_compliance_report(tenant_id="ent_tenant", actor="tester")
+    h = ent.get_reports()
+    assert h["count"] >= 1
+    assert h["reports"][-1]["compliance"] == "COMPLIANT"
+    assert h["canonical_spec"] == CANONICAL_SPEC
+
+
+def test_audit_logger_wired():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    assert ent._get_audit_logger() is not None
+
+
+def test_governance_wired():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    assert ent._get_governance() is not None
+
+
+def test_release_manager_wired():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    assert ent._get_release_manager() is not None
+
+
+def test_compliance_field():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    r = ent.generate_compliance_report(tenant_id="ent_tenant", actor="tester")
+    assert r["compliance"] == "COMPLIANT"
+    assert r["report"]["compliance"] == "COMPLIANT"
+    assert r["production_ready"] == True
+    assert r["all_checks"] == True
+
+
+def test_canonical_spec_enterprise():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    r = ent.generate_compliance_report(tenant_id="ent_tenant", actor="tester")
+    assert r["canonical_spec"] == CANONICAL_SPEC
+    assert ent.get_stats()["canonical_spec"] == CANONICAL_SPEC
+    assert ent.get_reports()["canonical_spec"] == CANONICAL_SPEC
+
+
+def test_zero_cost_enterprise():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    r = ent.generate_compliance_report(tenant_id="ent_tenant", actor="tester")
+    assert r["zero_cost"] == True
+    assert ent.get_stats()["zero_cost"] == True
+
+
+def test_stats_total_audits():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    before = ent.get_stats()["total_audits"]
+    ent.record_enterprise_event("stats.event", "tester", "ent_tenant")
+    after = ent.get_stats()["total_audits"]
+    assert after == before + 1
+    assert ent.get_stats()["total_reports"] >= 1
+
+
+def test_stats_wired_enterprise():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    s = ent.get_stats()
+    assert "wired" in s
+    assert set(s["wired"]) >= {"audit_logger", "governance", "release_manager"}
+    assert all(s["wired"].values())
+    assert s["compliant"] >= 1
+    assert s["non_compliant"] == 0
+
+
+def test_stats_dod_ref():
+    from fabric.registry.enterprise_audit import get_enterprise_audit
+
+    ent = get_enterprise_audit()
+    s = ent.get_stats()
+    assert "Understand->Plan" in s["dod_ref"]
+    assert s["zero_cost"] == True
+    assert s["canonical_spec"] == CANONICAL_SPEC

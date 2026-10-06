@@ -34,8 +34,8 @@ from fabric.registry.fastapi_apex import router as apex_router
 # Phase 5 - Release Pipeline (Gateway + Observability + Release Manager)
 from fabric.registry.fastapi_release import router as release_router
 
-# Phase 6 - Enterprise Scale (PART 1/2)
-from fabric.registry.fastapi_enterprise_part1 import router as enterprise_part1_router
+# Phase 6 - Enterprise Scale
+from fabric.registry.fastapi_enterprise import router as enterprise_router
 
 memory = LongTermMemory()
 approval = TelegramApprovalGate()
@@ -147,7 +147,7 @@ app.include_router(memory_router)
 app.include_router(orchestrator_router)
 app.include_router(apex_router)
 app.include_router(release_router)
-app.include_router(enterprise_part1_router)
+app.include_router(enterprise_router)
 
 
 async def _recall_context(message: str, user_id: str) -> str:
