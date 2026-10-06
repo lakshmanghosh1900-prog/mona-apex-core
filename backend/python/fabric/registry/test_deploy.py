@@ -284,3 +284,145 @@ def test_stats_cicd():
     assert s["total_manifests"] >= 1
     assert all(s["wired"].values())
     assert "Understand->Plan" in s["dod_ref"]
+
+
+# ---------- Stage 7.3 - Docs Manager & Final Release Audit (14) ----------
+
+
+def test_docs_manager_exists():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    assert dm is not None
+    assert get_docs_manager() is dm
+
+
+def test_create_doc_success():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    r = dm.create_doc("Unit Test Doc", "Body content", doc_type="guide", actor="tester")
+    assert r["success"] == True
+    assert r["title"] == "Unit Test Doc"
+    assert r["doc"]["version"] == "2.0.0-enterprise-final"
+
+
+def test_create_doc_invalid_title():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    r = dm.create_doc("ab", "Body", actor="tester")
+    assert r["success"] == False
+    assert r["canonical_spec"] == CANONICAL_SPEC
+
+
+def test_final_release_audit_stages():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    r = dm.final_release_audit(actor="tester")
+    assert bool(r["release"])
+    assert bool(r["stages"])
+    assert r["total"] >= 19
+    assert r["total"] == len(r["stages"])
+    assert "7.3" in r["stages"]
+
+
+def test_final_release_audit_all_pass():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    r = dm.final_release_audit(actor="tester")
+    failed = [k for k, v in r["stages"].items() if not v]
+    assert r["passed"] == r["total"], f"failed stages: {failed}"
+    assert r["all_checks"] == True
+    assert r["production_ready"] == True
+
+
+def test_final_field():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    r = dm.final_release_audit(actor="tester")
+    assert r["final"] == "FINAL PRODUCTION READY"
+    assert r["release"]["final"] == "FINAL PRODUCTION READY"
+    assert r["release"]["enterprise_ready"] == True
+
+
+def test_get_docs():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    dm.create_doc("Release Notes Doc", "content", actor="tester")
+    r = dm.get_docs()
+    assert r["count"] >= 1
+    assert r["canonical_spec"] == CANONICAL_SPEC
+
+
+def test_get_releases():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    dm.final_release_audit(actor="tester")
+    r = dm.get_releases()
+    assert r["count"] >= 1
+    assert r["releases"][-1]["version"] == "2.0.0-enterprise-final"
+
+
+def test_enterprise_audit_wired_docs():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    assert dm._get_enterprise_audit() is not None
+
+
+def test_release_manager_wired_docs():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    assert dm._get_release_manager() is not None
+
+
+def test_canonical_spec_docs():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    r = dm.create_doc("Canonical Doc", "content", actor="tester")
+    assert r["canonical_spec"] == CANONICAL_SPEC
+    assert dm.get_stats()["canonical_spec"] == CANONICAL_SPEC
+    assert dm.get_docs()["canonical_spec"] == CANONICAL_SPEC
+
+
+def test_zero_cost_docs():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    r = dm.create_doc("Zero Cost Doc", "content", actor="tester")
+    assert r["zero_cost"] == True
+    audit = dm.final_release_audit(actor="tester")
+    assert audit["zero_cost"] == True
+    assert dm.get_stats()["zero_cost"] == True
+
+
+def test_stats_docs():
+    from fabric.registry.docs_manager import get_docs_manager
+
+    dm = get_docs_manager()
+    dm.create_doc("Stats Doc", "content", actor="tester")
+    s = dm.get_stats()
+    assert "total_docs" in s
+    assert s["total_docs"] >= 1
+    assert s["total_releases"] >= 1
+    assert all(s["wired"].values())
+    assert s["wired_all"] == True
+    assert "Understand->Plan" in s["dod_ref"]
+
+
+def test_stats_version_docs():
+    from fabric.registry.docs_manager import get_docs_manager, VERSION
+
+    dm = get_docs_manager()
+    s = dm.get_stats()
+    assert s["version"] == VERSION
+    assert s["final_version"] == VERSION
+    assert VERSION == "2.0.0-enterprise-final"
