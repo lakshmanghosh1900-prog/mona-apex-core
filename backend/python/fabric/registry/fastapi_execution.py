@@ -162,5 +162,6 @@ def execution_stats():
     return sb.get_stats()
 
 
-# NOTE: /phase3/mega/verify is owned by fastapi_tool_registry.py (Stage 3.2) since
-# Stage 3.2, so the mega endpoint stays a single source of truth across 2.4-3.2.
+# NOTE: /phase3/mega/verify is owned by fastapi_orchestrator.py (Stage 3.4) and
+# delegated to from fastapi_tool_registry.py (Stage 3.2) so the mega endpoint
+# stays a single source of truth across 2.4-3.4.
