@@ -34,6 +34,9 @@ from fabric.registry.fastapi_apex import router as apex_router
 # Phase 5 - Release Pipeline (Gateway + Observability + Release Manager)
 from fabric.registry.fastapi_release import router as release_router
 
+# Phase 6 - Enterprise Scale (PART 1/2)
+from fabric.registry.fastapi_enterprise_part1 import router as enterprise_part1_router
+
 memory = LongTermMemory()
 approval = TelegramApprovalGate()
 orchestrator = SelfHealingOrchestrator(approval=approval, memory=memory)
@@ -44,6 +47,20 @@ async def lifespan(_: FastAPI):
     await memory.start()
     await approval.start()
     try:
+        try:
+            from fabric.registry.audit_logger import get_audit_logger
+
+            get_audit_logger().log(
+                "server.start",
+                "system",
+                "System",
+                {"event": "startup", "service": "mona-apex-core"},
+                {"success": True},
+                approved=True,
+                policy_decision="ALLOW",
+            )
+        except Exception:
+            pass
         yield
     finally:
         await approval.stop()
@@ -130,6 +147,7 @@ app.include_router(memory_router)
 app.include_router(orchestrator_router)
 app.include_router(apex_router)
 app.include_router(release_router)
+app.include_router(enterprise_part1_router)
 
 
 async def _recall_context(message: str, user_id: str) -> str:
