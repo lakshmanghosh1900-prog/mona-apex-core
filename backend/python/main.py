@@ -31,6 +31,9 @@ from fabric.registry.fastapi_orchestrator import router as orchestrator_router
 # Phase 4 - Apex Core
 from fabric.registry.fastapi_apex import router as apex_router
 
+# Phase 5 - API Gateway + Observability (PART 1/2)
+from fabric.registry.fastapi_release_part1 import router as release_part1_router
+
 memory = LongTermMemory()
 approval = TelegramApprovalGate()
 orchestrator = SelfHealingOrchestrator(approval=approval, memory=memory)
@@ -126,6 +129,7 @@ app.include_router(approval_router)
 app.include_router(memory_router)
 app.include_router(orchestrator_router)
 app.include_router(apex_router)
+app.include_router(release_part1_router)
 
 
 async def _recall_context(message: str, user_id: str) -> str:
