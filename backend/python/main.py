@@ -28,6 +28,9 @@ from fabric.registry.fastapi_tool_registry import router as tool_registry_router
 from fabric.registry.fastapi_memory import router as memory_router
 from fabric.registry.fastapi_orchestrator import router as orchestrator_router
 
+# Phase 4 - Apex Core
+from fabric.registry.fastapi_apex import router as apex_router
+
 memory = LongTermMemory()
 approval = TelegramApprovalGate()
 orchestrator = SelfHealingOrchestrator(approval=approval, memory=memory)
@@ -43,7 +46,7 @@ async def lifespan(_: FastAPI):
         await approval.stop()
 
 
-app = FastAPI(title="Mona - Apex Core", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="MONA Apex Core", version="Phase 4 FULL", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origin_list or ["*"],
@@ -122,6 +125,7 @@ app.include_router(audit_router)
 app.include_router(approval_router)
 app.include_router(memory_router)
 app.include_router(orchestrator_router)
+app.include_router(apex_router)
 
 
 async def _recall_context(message: str, user_id: str) -> str:

@@ -158,13 +158,8 @@ def tool_stats():
         return {"error": str(e)}
 
 
-@router.get("/phase3/mega/verify")
-async def verify_phase3_mega():
-    """Stage 3.2 registered this route first; the full 2.4-3.4 payload now lives
-    with Stage 3.4 (fastapi_orchestrator). Delegating keeps a single source of
-    truth regardless of router registration order."""
-    from fabric.registry.fastapi_orchestrator import verify_phase3_mega as _mega
-
-    return await _mega()
+# NOTE: /phase3/mega/verify is owned exclusively by fastapi_orchestrator.py
+# (Stage 3.4). Stage 3.2 no longer declares a duplicate/delegating route, so the
+# path is registered exactly once regardless of router inclusion order.
 
 
