@@ -276,3 +276,144 @@ def test_logs_recorded_observability():
     s = obs.get_stats()
     assert s["total_logs"] >= 1
     assert any(l.get("name") == "part1_logged_metric" for l in obs.logs)
+
+
+# ---------- Stage 5.3 - Release Manager (14) ----------
+
+
+def test_release_manager_exists():
+    from fabric.registry.release_manager import get_release_manager
+
+    rm = get_release_manager()
+    assert rm is not None
+    assert get_release_manager() is rm
+
+
+def test_create_release_success():
+    from fabric.registry.release_manager import get_release_manager
+
+    rm = get_release_manager()
+    r = rm.create_release(actor="tester", tenant_id="release_test")
+    assert r["success"] == True
+    assert r["version"] == "1.0.0-production"
+
+
+def test_create_release_stages_total():
+    from fabric.registry.release_manager import get_release_manager
+
+    rm = get_release_manager()
+    r = rm.create_release(actor="tester", tenant_id="release_test")
+    assert r["total"] >= 10
+    assert r["passed"] <= r["total"]
+
+
+def test_create_release_all_stages_passed():
+    from fabric.registry.release_manager import get_release_manager
+
+    rm = get_release_manager()
+    r = rm.create_release(actor="tester", tenant_id="release_test")
+    failed = [k for k, v in r["stages"].items() if not v]
+    assert r["passed"] == r["total"], f"failed stages: {failed}"
+    assert r["production_ready"] == True
+
+
+def test_create_release_production_ready():
+    from fabric.registry.release_manager import get_release_manager
+
+    rm = get_release_manager()
+    r = rm.create_release(actor="tester", tenant_id="release_test")
+    assert r["production_ready"] == True
+    assert r["isolated"] == True
+
+
+def test_create_release_stage_keys():
+    from fabric.registry.release_manager import get_release_manager, STAGE_KEYS
+
+    rm = get_release_manager()
+    r = rm.create_release(actor="tester", tenant_id="release_test")
+    for key in STAGE_KEYS:
+        assert key in r["stages"], f"missing stage {key}"
+    assert len(STAGE_KEYS) == 13
+
+
+def test_release_version_field():
+    from fabric.registry.release_manager import get_release_manager, VERSION
+
+    rm = get_release_manager()
+    r = rm.create_release(actor="tester", tenant_id="release_test")
+    assert r["version"] == VERSION
+    assert rm.get_stats()["version"] == VERSION
+
+
+def test_canonical_spec_release():
+    from fabric.registry.release_manager import get_release_manager
+
+    rm = get_release_manager()
+    r = rm.create_release(actor="tester", tenant_id="release_test")
+    assert r["canonical_spec"] == CANONICAL_SPEC
+    assert rm.get_stats()["canonical_spec"] == CANONICAL_SPEC
+    assert rm.get_releases()["canonical_spec"] == CANONICAL_SPEC
+
+
+def test_zero_cost_dod_release():
+    from fabric.registry.release_manager import get_release_manager
+
+    rm = get_release_manager()
+    r = rm.create_release(actor="tester", tenant_id="release_test")
+    assert r["zero_cost"] == True
+    assert "Understand->Plan" in r["dod_ref"]
+    assert rm.get_stats()["zero_cost"] == True
+
+
+def test_release_history():
+    from fabric.registry.release_manager import get_release_manager
+
+    rm = get_release_manager()
+    rm.create_release(actor="tester", tenant_id="release_test")
+    h = rm.get_releases()
+    assert h["count"] >= 1
+    assert h["releases"][-1]["version"] == "1.0.0-production"
+    assert h["releases"][-1]["production_ready"] == True
+
+
+def test_stats_total_releases():
+    from fabric.registry.release_manager import get_release_manager
+
+    rm = get_release_manager()
+    before = rm.get_stats()["total_releases"]
+    rm.create_release(actor="tester", tenant_id="release_test")
+    after = rm.get_stats()["total_releases"]
+    assert after == before + 1
+    assert rm.get_stats()["production_ready"] >= 1
+
+
+def test_stats_wired_release():
+    from fabric.registry.release_manager import get_release_manager
+
+    rm = get_release_manager()
+    s = rm.get_stats()
+    assert "wired" in s
+    assert set(s["wired"]) >= {"audit", "tool_registry", "api_gateway", "observability", "apex_core"}
+    assert all(s["wired"].values())
+    assert s["wired_all"] == True
+    assert s["stack"] == "zero-cost"
+    assert "Understand->Plan" in s["dod_ref"]
+
+
+def test_audit_wired_release():
+    from fabric.registry.release_manager import get_release_manager
+
+    rm = get_release_manager()
+    assert rm._get_audit() is not None
+
+
+def test_release_recorded_latest():
+    from fabric.registry.release_manager import get_release_manager
+
+    rm = get_release_manager()
+    r = rm.create_release(actor="tester", tenant_id="release_test")
+    latest = rm.get_releases()["releases"][-1]
+    assert latest["passed"] == r["passed"]
+    assert latest["total"] == r["total"]
+    assert latest["production_ready"] == True
+    assert latest["zero_cost"] == True
