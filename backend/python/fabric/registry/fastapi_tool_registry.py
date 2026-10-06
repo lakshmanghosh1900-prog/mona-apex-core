@@ -159,86 +159,12 @@ def tool_stats():
 
 
 @router.get("/phase3/mega/verify")
-def verify_phase3_mega():
-    results = {}
-    details = {}
-    # Phase 2
-    try:
-        from fabric.registry.secrets_manager import get_secrets_manager
-        sm = get_secrets_manager()
-        findings = sm.scan_hardcoded()
-        results["2.4"] = bool(sm.is_secure()) and len(findings) == 0
-        details["2.4"] = f"scan clean ({len(findings)} findings)"
-    except Exception as e:
-        results["2.4"] = False
-        details["2.4"] = str(e)
-    try:
-        from fabric.registry.audit_logger import get_audit_logger
-        audit = get_audit_logger()
-        audit.log(
-            "test.mega",
-            "mega_test",
-            "User",
-            {"stage": "phase3.mega"},
-            {"success": True},
-            approved=True,
-            policy_decision="ALLOW",
-        )
-        trail = audit.get_trail()
-        results["2.5"] = trail.get("count", 0) >= 1
-        details["2.5"] = f"chain len={trail.get('count', 0)}"
-    except Exception as e:
-        results["2.5"] = False
-        details["2.5"] = str(e)
-    try:
-        from fabric.registry.tenant_isolation import get_tenant_manager
-        tm = get_tenant_manager()
-        results["2.6"] = tm.get_stats().get("total_tenants", 0) >= 0
-        details["2.6"] = "tenant"
-    except Exception as e:
-        results["2.6"] = False
-        details["2.6"] = str(e)
-    try:
-        from fabric.registry.rate_limiter import get_rate_limiter
-        rl = get_rate_limiter()
-        results["2.7"] = rl.get_stats().get("total_buckets", 0) >= 0
-        details["2.7"] = "rate limit"
-    except Exception as e:
-        results["2.7"] = False
-        details["2.7"] = str(e)
-    # Phase 3.1
-    try:
-        from fabric.registry.execution_sandbox import get_execution_sandbox
-        sb = get_execution_sandbox()
-        r = sb.execute_python("print(42)", actor="mega_test", tenant_id="mega_test")
-        results["3.1"] = r.get("success") == True and "42" in r.get("output", "")
-        details["3.1"] = "execution sandbox"
-    except Exception as e:
-        results["3.1"] = False
-        details["3.1"] = str(e)
-    # Phase 3.2
-    try:
-        from fabric.registry.tool_registry import get_tool_registry
-        tr = get_tool_registry()
-        r = tr.select_tool("search web")
-        results["3.2"] = r.get("tool") == "browser.search"
-        details["3.2"] = f"tools={tr.get_stats()['total_tools']}"
-    except Exception as e:
-        results["3.2"] = False
-        details["3.2"] = str(e)
+async def verify_phase3_mega():
+    """Stage 3.2 registered this route first; the full 2.4-3.4 payload now lives
+    with Stage 3.4 (fastapi_orchestrator). Delegating keeps a single source of
+    truth regardless of router registration order."""
+    from fabric.registry.fastapi_orchestrator import verify_phase3_mega as _mega
 
-    all_ok = all(bool(v) for v in results.values())
-    failed = [k for k, v in results.items() if not v]
-    return {
-        "phase": "Phase 3 - Execution Fabric - MEGA 2.4-3.2",
-        "status": "PHASE 3.2 COMPLETE" if all_ok else f"INCOMPLETE failed {failed}",
-        "all_checks": all_ok,
-        "complete": {k: bool(v) for k, v in results.items()},
-        "stages": results,
-        "details": details,
-        "passed": sum(1 for v in results.values() if v),
-        "total": len(results),
-        "canonical_spec": CANONICAL_SPEC,
-        "zero_cost": True,
-        "next": "Phase 3.3 - Memory & Resume Later" if all_ok else "Fix failed stages",
-    }
+    return await _mega()
+
+

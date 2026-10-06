@@ -25,6 +25,8 @@ from fabric.registry.fastapi_tenant import router as tenant_router
 from fabric.registry.fastapi_rate_limit import router as rate_router
 from fabric.registry.fastapi_execution import router as execution_router
 from fabric.registry.fastapi_tool_registry import router as tool_registry_router
+from fabric.registry.fastapi_memory import router as memory_router
+from fabric.registry.fastapi_orchestrator import router as orchestrator_router
 
 memory = LongTermMemory()
 approval = TelegramApprovalGate()
@@ -118,6 +120,8 @@ app.include_router(rate_router)
 app.include_router(tenant_router)
 app.include_router(audit_router)
 app.include_router(approval_router)
+app.include_router(memory_router)
+app.include_router(orchestrator_router)
 
 
 async def _recall_context(message: str, user_id: str) -> str:
