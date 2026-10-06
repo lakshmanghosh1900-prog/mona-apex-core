@@ -1,3 +1,4 @@
+from fabric.registry.state_root import state_dir
 import time
 import threading
 import hashlib
@@ -5,7 +6,7 @@ import json
 import pathlib
 from typing import Dict, List, Optional, Any
 
-MEMORY_ROOT = pathlib.Path("/tmp/mona_sandbox/memory")
+MEMORY_ROOT = state_dir("memory")
 CACHE_ROOT = MEMORY_ROOT / "advanced_cache"
 CACHE_ROOT.mkdir(parents=True, exist_ok=True)
 

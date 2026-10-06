@@ -9,6 +9,7 @@ from typing import Any
 
 from fabric.registry.file_tool import is_contained, sandbox_root
 from fabric.registry.registry_loader import get_registry
+from fabric.registry.state_root import get_state_root, state_dir
 
 TOOL_NAME = "code.run"
 DEFAULT_TIMEOUT = 15
@@ -33,14 +34,23 @@ class SandboxPermissionError(PermissionError):
 
 
 class SecureSandbox:
-    """Stage 1.7 — run untrusted Python in a jailed subprocess.
+    """Stage 1.7 — isolation-verification harness for untrusted Python.
 
-    Guarantees: a fresh interpreter (`python -I`, so `PYTHON*` and user-site
+    Canonical ownership (gate D4): this class is NOT the production sandbox
+    engine. Production code execution is owned exclusively by
+    ``fabric.registry.execution_sandbox.ExecutionSandbox`` (DoD chain,
+    apex, release, deploy). SecureSandbox exists solely to *verify* isolation
+    guarantees: a fresh interpreter (`python -I`, so `PYTHON*` and user-site
     are ignored), cwd pinned to the sandbox root, a scrubbed environment (no
-    API keys), a wall-clock timeout with process kill, and truncated output.
-    This is a *soft* jail — see `SANDBOX_LIMITS` and `fabric/sandbox/` for
-    what it deliberately does not claim.
+    API keys), a wall-clock timeout with process kill, and truncated output —
+    semantics that only a real subprocess can demonstrate (child pid, timeout
+    kill, env scrub, confined writes). This is a *soft* jail — see
+    `SANDBOX_LIMITS` and `fabric/sandbox/` for what it deliberately does not
+    claim.
     """
+
+    # Ownership marker (D4): verification harness only, never production.
+    CANONICAL_ROLE = "verification"
 
     def __init__(self, root: Path | str | None = None) -> None:
         self.root = Path(root) if root is not None else sandbox_root()
@@ -173,7 +183,7 @@ class SecureSandbox:
             "checks": checks,
             "failed_checks": [name for name, ok in checks.items() if not ok],
             "sandbox_root": str(self.root),
-            "canonical_root": "/tmp/mona_sandbox",
+            "canonical_root": str(get_state_root()),
             "cwd_reported": cwd,
             "execution_count": self.execution_count,
             "timeout_count": self.timeout_count,

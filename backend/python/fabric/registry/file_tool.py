@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fabric.registry.registry_loader import get_registry
+from fabric.registry.state_root import get_state_root
 
 TOOL_READ = "files.read"
 TOOL_WRITE = "files.write"
@@ -32,18 +33,16 @@ class FilePermissionError(PermissionError):
 def sandbox_root() -> Path:
     """Active sandbox root.
 
-    Canonical location is `SANDBOX_ROOT` (`/tmp/mona_sandbox`) on POSIX. On
-    Windows `/tmp` is not a real mount point, so the OS temp dir is used;
-    override anywhere with MONA_SANDBOX_ROOT. The directory is created on
+    Canonical location is the durable state root: ``$MONA_STATE_DIR`` when
+    set, otherwise ``~/.mona/sandbox`` (gates P1+P4). ``MONA_SANDBOX_ROOT``
+    is still honored as a legacy override. The directory is created on
     demand.
     """
-    override = os.getenv(ENV_SANDBOX_ROOT, "").strip()
+    override = os.getenv(ENV_SANDBOX_ROOT, "").strip() or os.getenv("MONA_STATE_DIR", "").strip()
     if override:
         root = Path(override).expanduser()
-    elif os.name != "nt":
-        root = Path(SANDBOX_ROOT)
     else:
-        root = Path(tempfile.gettempdir()) / "mona_sandbox"
+        root = get_state_root()
     try:
         root.mkdir(parents=True, exist_ok=True)
     except OSError:

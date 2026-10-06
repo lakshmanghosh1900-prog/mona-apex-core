@@ -24,6 +24,9 @@ services:
     environment:
       QDRANT_URL: http://qdrant:6333
       PORT: '8000'
+      MONA_STATE_DIR: /data/mona_sandbox
+    volumes:
+      - mona_state:/data/mona_sandbox
     ports:
       - '8000:8000'
     depends_on:
@@ -38,3 +41,4 @@ services:
 
 volumes:
   qdrant_data:
+  mona_state:

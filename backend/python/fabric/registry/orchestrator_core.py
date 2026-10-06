@@ -9,8 +9,12 @@ DOD_REF = (
 )
 
 
-class SelfHealingOrchestrator:
-    """Stage 3.4 - Orchestration & Self-Heal Loop.
+class StagedOrchestrator:
+    """Stage 3.4 - Orchestration & Self-Heal Loop (canonical zero-cost owner).
+
+    Canonical ownership (gate D5): this class is the ONLY zero-cost staged
+    orchestrator. The LLM/langgraph runtime orchestrator lives separately in
+    ``core.orchestrator`` and is NOT duplicated here.
 
     Runs the full DoD chain for every task:
     Understand -> Plan -> Select Model -> Select Tool -> Check Permission ->
@@ -321,14 +325,21 @@ class SelfHealingOrchestrator:
         }
 
 
-_singleton: Optional[SelfHealingOrchestrator] = None
+_singleton: Optional["StagedOrchestrator"] = None
 _singleton_lock = threading.Lock()
 
 
-def get_self_healing_orchestrator() -> SelfHealingOrchestrator:
+def get_staged_orchestrator() -> "StagedOrchestrator":
+    """Canonical getter for the zero-cost staged orchestrator (gate D5)."""
     global _singleton
     if _singleton is None:
         with _singleton_lock:
             if _singleton is None:
-                _singleton = SelfHealingOrchestrator()
+                _singleton = StagedOrchestrator()
     return _singleton
+
+
+# Backward-compatible aliases (deprecated). Callers should migrate to
+# get_staged_orchestrator / StagedOrchestrator.
+SelfHealingOrchestrator = StagedOrchestrator
+get_self_healing_orchestrator = get_staged_orchestrator

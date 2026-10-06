@@ -9,7 +9,13 @@ MODELS = ["groq-llama", "gemini-flash", "openai-gpt", "claude-haiku"]
 
 class MultiModelOrchestrator:
     """Stage 6.1 - multi-model selection with deterministic heuristics and a
-    4-model fallback chain. Zero-cost, stdlib only."""
+    4-model fallback chain. Zero-cost, stdlib only.
+
+    Canonical ownership (gate D2): the model-selection *decision* is owned by
+    ``tool_registry.select_model``. This class applies the availability and
+    fallback overlay on top of that decision and maps the complexity signal
+    onto its 4-model catalog.
+    """
 
     def __init__(self):
         self.models: Dict[str, Dict] = {m: {"name": m, "available": True, "calls": 0, "failures": 0} for m in MODELS}
@@ -39,8 +45,25 @@ class MultiModelOrchestrator:
 
     def select_model(self, task: str, preferred: Optional[str] = None) -> Dict:
         with self._lock:
+            # Canonical decision owner (D2): tool_registry owns the selection
+            # heuristics. We consume its complexity signal and map it onto
+            # this orchestrator's 4-model catalog.
+            tr = self._get_tool_registry()
+            is_complex = None
+            decision_source = "legacy_heuristic"
+            if tr is not None:
+                try:
+                    reg = tr.select_model(task)
+                    is_complex = bool(reg.get("is_complex"))
+                    decision_source = "tool_registry"
+                except Exception:
+                    is_complex = None
+
             if preferred and preferred in self.models and self.models[preferred]["available"]:
                 model = preferred
+                decision_source = "preferred"
+            elif decision_source == "tool_registry" and is_complex is not None:
+                model = "gemini-flash" if is_complex else "groq-llama"
             else:
                 if "search" in task.lower():
                     model = "groq-llama"
@@ -48,6 +71,15 @@ class MultiModelOrchestrator:
                     model = "gemini-flash"
                 else:
                     model = self.fallback_chain[0]
+
+            # Availability overlay: if the selected model is unavailable,
+            # walk the fallback chain.
+            if model not in self.models or not self.models[model]["available"]:
+                for m in self.fallback_chain:
+                    if self.models[m]["available"]:
+                        model = m
+                        break
+
             self.models[model]["calls"] += 1
             entry = {"task": task[:200], "model": model, "timestamp": time.time(), "canonical_spec": CANONICAL_SPEC, "zero_cost": True}
             self.history.append(entry)
@@ -58,6 +90,8 @@ class MultiModelOrchestrator:
                 "canonical_spec": CANONICAL_SPEC,
                 "zero_cost": True,
                 "isolated": True,
+                "decision_source": decision_source,
+                "is_complex": is_complex,
             }
 
     def fallback(self, failed_model: str, task: str) -> Dict:

@@ -108,7 +108,6 @@ def verify_stage_2_7():
             "status": f"❌ ERROR: {ex}",
             "all_checks": False,
             "error": str(ex),
-            "traceback": traceback.format_exc(),
             "checks": checks
         }
 

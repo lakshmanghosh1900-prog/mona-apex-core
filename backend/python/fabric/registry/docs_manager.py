@@ -1,10 +1,11 @@
+from fabric.registry.state_root import state_dir
 import time
 import threading
 import pathlib
 import json
 from typing import Dict, List, Optional
 
-MEMORY_ROOT = pathlib.Path("/tmp/mona_sandbox/memory")
+MEMORY_ROOT = state_dir("memory")
 DOCS_ROOT = MEMORY_ROOT / "docs"
 DOCS_ROOT.mkdir(parents=True, exist_ok=True)
 

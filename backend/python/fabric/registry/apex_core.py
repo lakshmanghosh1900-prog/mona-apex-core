@@ -89,8 +89,8 @@ class ApexCore:
     def _get_orchestrator(self):
         if self._orchestrator is None:
             try:
-                from fabric.registry.orchestrator_core import get_self_healing_orchestrator
-                self._orchestrator = get_self_healing_orchestrator()
+                from fabric.registry.orchestrator_core import get_staged_orchestrator
+                self._orchestrator = get_staged_orchestrator()
             except Exception:
                 self._orchestrator = None
         return self._orchestrator

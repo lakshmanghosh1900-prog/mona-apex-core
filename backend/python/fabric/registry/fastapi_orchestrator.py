@@ -27,9 +27,9 @@ def verify_stage_3_4():
     try:
         import time
 
-        from fabric.registry.orchestrator_core import get_self_healing_orchestrator
+        from fabric.registry.orchestrator_core import get_staged_orchestrator
 
-        orch = get_self_healing_orchestrator()
+        orch = get_staged_orchestrator()
         orch.runs.clear()
 
         # 1: orchestrator exists
@@ -99,7 +99,6 @@ def verify_stage_3_4():
             "status": f"ERROR: {ex}",
             "all_checks": False,
             "error": str(ex),
-            "traceback": traceback.format_exc(),
             "checks": checks,
             "canonical_spec": CANONICAL_SPEC,
         }
@@ -108,9 +107,9 @@ def verify_stage_3_4():
 @router.post("/orchestrate/run")
 def orchestrate_run(req: OrchestrateRequest):
     try:
-        from fabric.registry.orchestrator_core import get_self_healing_orchestrator
+        from fabric.registry.orchestrator_core import get_staged_orchestrator
 
-        orch = get_self_healing_orchestrator()
+        orch = get_staged_orchestrator()
         return orch.execute(req.task, req.actor, req.tenant_id)
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -119,9 +118,9 @@ def orchestrate_run(req: OrchestrateRequest):
 @router.get("/orchestrate/stats")
 def orchestrate_stats():
     try:
-        from fabric.registry.orchestrator_core import get_self_healing_orchestrator
+        from fabric.registry.orchestrator_core import get_staged_orchestrator
 
-        orch = get_self_healing_orchestrator()
+        orch = get_staged_orchestrator()
         return orch.get_stats()
     except Exception as e:
         return {"error": str(e)}
@@ -129,106 +128,16 @@ def orchestrate_stats():
 
 @router.get("/phase3/mega/verify")
 async def verify_phase3_mega() -> Dict[str, Any]:
-    """Phase 3 FULL MEGA - every stage 2.4 through 3.4 in one pass."""
-    results: Dict[str, bool] = {}
-    details: Dict[str, str] = {}
+    """Phase 3 FULL MEGA - every stage 2.4 through 3.4 in one pass.
 
-    # 2.4 secrets management
-    try:
-        from fabric.registry.secrets_manager import get_secrets_manager
+    Stage probing delegates to the central stage sweep (gate D1).
+    """
+    from fabric.registry.stage_sweep import run_stage_sweep
 
-        sm = get_secrets_manager()
-        findings = sm.scan_hardcoded() if hasattr(sm, "scan_hardcoded") else []
-        secure = sm.is_secure() if hasattr(sm, "is_secure") else True
-        results["2.4"] = bool(secure) and len(findings) == 0
-        details["2.4"] = f"scan clean ({len(findings)} findings)"
-    except Exception as e:
-        results["2.4"] = False
-        details["2.4"] = str(e)
-
-    # 2.5 audit trail / evidence chain
-    try:
-        from fabric.registry.audit_logger import get_audit_logger
-
-        audit = get_audit_logger()
-        stats = audit.get_stats()
-        results["2.5"] = bool(stats.get("chain_valid")) and stats.get("total_logs", 0) >= 1
-        details["2.5"] = f"chain len={stats.get('chain_length', 0)} logs={stats.get('total_logs', 0)}"
-    except Exception as e:
-        results["2.5"] = False
-        details["2.5"] = str(e)
-
-    # 2.6 tenant isolation
-    try:
-        from fabric.registry.tenant_isolation import get_tenant_manager
-
-        tm = get_tenant_manager()
-        results["2.6"] = tm.get_stats().get("total_tenants", 0) >= 0
-        details["2.6"] = f"tenants={tm.get_stats().get('total_tenants', 0)}"
-    except Exception as e:
-        results["2.6"] = False
-        details["2.6"] = str(e)
-
-    # 2.7 rate limiting / quota
-    try:
-        from fabric.registry.rate_limiter import get_rate_limiter
-
-        rl = get_rate_limiter()
-        results["2.7"] = rl.get_stats().get("total_buckets", 0) >= 0
-        details["2.7"] = f"buckets={rl.get_stats().get('total_buckets', 0)}"
-    except Exception as e:
-        results["2.7"] = False
-        details["2.7"] = str(e)
-
-    # 3.1 execution sandbox
-    try:
-        from fabric.registry.execution_sandbox import get_execution_sandbox
-
-        sb = get_execution_sandbox()
-        r = sb.execute_python("print(42)", actor="mega_test", tenant_id="mega_test")
-        results["3.1"] = r.get("success") == True and "42" in r.get("output", "")
-        details["3.1"] = "execution sandbox"
-    except Exception as e:
-        results["3.1"] = False
-        details["3.1"] = str(e)
-
-    # 3.2 tool registry & model selection
-    try:
-        from fabric.registry.tool_registry import get_tool_registry
-
-        tr = get_tool_registry()
-        r = tr.select_tool("search web")
-        results["3.2"] = r.get("tool") == "browser.search"
-        details["3.2"] = f"tools={tr.get_stats()['total_tools']}"
-    except Exception as e:
-        results["3.2"] = False
-        details["3.2"] = str(e)
-
-    # 3.3 memory & resume later
-    try:
-        from fabric.registry.memory_store import get_memory_store
-
-        ms = get_memory_store()
-        r = ms.save_memory("mega_test", {"data": "test"}, actor="mega", tenant_id="mega")
-        results["3.3"] = r.get("success") == True
-        details["3.3"] = f"memories={ms.get_stats()['total_memories']}"
-    except Exception as e:
-        results["3.3"] = False
-        details["3.3"] = str(e)
-
-    # 3.4 orchestration & self-heal loop
-    try:
-        from fabric.registry.orchestrator_core import get_self_healing_orchestrator
-
-        orch = get_self_healing_orchestrator()
-        r = orch.execute("test task", actor="mega", tenant_id="mega")
-        results["3.4"] = r.get("canonical_spec") == "MONA - Powered by Apex Core"
-        details["3.4"] = f"runs={orch.get_stats()['total_runs']}"
-    except Exception as e:
-        results["3.4"] = False
-        details["3.4"] = str(e)
-
-    all_ok = all(bool(v) for v in results.values())
+    sweep = run_stage_sweep(start="2.4", end="3.4", actor="mega", tenant_id="mega")
+    results = sweep["stages"]
+    details = sweep["details"]
+    all_ok = sweep["all_checks"]
     return {
         "phase": "Phase 3 — Execution Fabric — FULL MEGA 2.4-3.4",
         "status": "PHASE 3 FULL COMPLETE" if all_ok else f"INCOMPLETE failed {[k for k, v in results.items() if not v]}",
@@ -236,8 +145,8 @@ async def verify_phase3_mega() -> Dict[str, Any]:
         "stages": results,
         "complete": {k: bool(v) for k, v in results.items()},
         "details": details,
-        "passed": sum(1 for v in results.values() if v),
-        "total": len(results),
+        "passed": sweep["passed"],
+        "total": sweep["total"],
         "canonical_spec": CANONICAL_SPEC,
         "zero_cost": True,
         "next": "Phase 4 — Apex Core" if all_ok else "Fix failed stages",

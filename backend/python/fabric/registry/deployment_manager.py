@@ -1,10 +1,11 @@
+from fabric.registry.state_root import state_dir
 import time
 import threading
 import pathlib
 import json
 from typing import Dict, List, Optional
 
-MEMORY_ROOT = pathlib.Path("/tmp/mona_sandbox/memory")
+MEMORY_ROOT = state_dir("memory")
 DEPLOY_ROOT = MEMORY_ROOT / "deployment"
 DEPLOY_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -74,28 +75,39 @@ class DeploymentManager:
         }
 
     def health_probe(self, component: str = "api") -> Dict:
-        checks = {}
+        """Deployment health probe.
+
+        Canonical ownership (gate D3): delegates to ``observability.health_check``
+        for the canonical system health survey and merges deployment-specific
+        wiring checks (api_gateway, enterprise_audit) on top. The response shape
+        (healthy / all_checks / checks / passed / total) is preserved.
+        """
+        checks: Dict = {}
+        all_ok = True
+
+        # Canonical health survey (D3): reuse observability.health_check
+        try:
+            from fabric.registry.observability import get_observability
+            obs = get_observability()
+            obs_result = obs.health_check(component=component)
+            checks.update(obs_result.get("checks", {}))
+            all_ok = all_ok and bool(obs_result.get("healthy"))
+        except Exception:
+            all_ok = False
+
+        # Deployment-specific wiring checks merged on top
         try:
             from fabric.registry.api_gateway import get_api_gateway
             checks["api_gateway"] = get_api_gateway() is not None
         except Exception:
             checks["api_gateway"] = False
         try:
-            from fabric.registry.apex_core import get_apex_core
-            checks["apex_core"] = get_apex_core() is not None
-        except Exception:
-            checks["apex_core"] = False
-        try:
-            from fabric.registry.observability import get_observability
-            checks["observability"] = get_observability() is not None
-        except Exception:
-            checks["observability"] = False
-        try:
             from fabric.registry.enterprise_audit import get_enterprise_audit
             checks["enterprise_audit"] = get_enterprise_audit() is not None
         except Exception:
             checks["enterprise_audit"] = False
-        all_ok = all(checks.values())
+        all_ok = all_ok and bool(checks.get("api_gateway")) and bool(checks.get("enterprise_audit"))
+
         entry = {
             "component": component,
             "checks": checks,

@@ -1,11 +1,11 @@
 import pytest
 
-from fabric.registry.orchestrator_core import get_self_healing_orchestrator
+from fabric.registry.orchestrator_core import get_staged_orchestrator
 
 
 @pytest.fixture()
 def orch():
-    return get_self_healing_orchestrator()
+    return get_staged_orchestrator()
 
 
 def test_orchestrator_exists(orch):

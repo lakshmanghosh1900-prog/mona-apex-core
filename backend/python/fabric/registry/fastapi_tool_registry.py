@@ -102,7 +102,6 @@ def verify_stage_3_2():
             "status": f"ERROR: {ex}",
             "all_checks": False,
             "error": str(ex),
-            "traceback": traceback.format_exc(),
             "checks": checks,
             "canonical_spec": CANONICAL_SPEC,
         }

@@ -1,10 +1,11 @@
+from fabric.registry.state_root import state_dir
 import time
 import threading
 import pathlib
 import json
 from typing import Dict, List, Optional
 
-MEMORY_ROOT = pathlib.Path("/tmp/mona_sandbox/memory")
+MEMORY_ROOT = state_dir("memory")
 ENT_ROOT = MEMORY_ROOT / "enterprise_audit"
 ENT_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -86,138 +87,19 @@ class EnterpriseAudit:
         return {"success": True, "event": event, "severity": severity, "canonical_spec": CANONICAL_SPEC, "zero_cost": True}
 
     def generate_compliance_report(self, tenant_id: str = "default", actor: str = "system") -> Dict:
-        stage_results: Dict[str, bool] = {}
+        """Enterprise compliance report (D1): delegates to the central stage
+        sweep in wiring mode for stages 2.4 -> 6.3 instead of re-implementing
+        per-stage try/except blocks."""
+        from fabric.registry.stage_sweep import run_stage_sweep
 
-        try:
-            from fabric.registry.secrets_manager import get_secrets_manager
-
-            sm = get_secrets_manager()
-            findings = sm.scan_hardcoded() if hasattr(sm, "scan_hardcoded") else []
-            stage_results["2.4"] = len(findings) == 0
-        except Exception:
-            stage_results["2.4"] = False
-
-        try:
-            from fabric.registry.audit_logger import get_audit_logger
-
-            audit = get_audit_logger()
-            stage_results["2.5"] = bool(audit.get_stats().get("chain_valid"))
-        except Exception:
-            stage_results["2.5"] = False
-
-        try:
-            from fabric.registry.tenant_isolation import get_tenant_manager
-
-            get_tenant_manager()
-            stage_results["2.6"] = True
-        except Exception:
-            stage_results["2.6"] = False
-
-        try:
-            from fabric.registry.rate_limiter import get_rate_limiter
-
-            get_rate_limiter()
-            stage_results["2.7"] = True
-        except Exception:
-            stage_results["2.7"] = False
-
-        try:
-            from fabric.registry.execution_sandbox import get_execution_sandbox
-
-            get_execution_sandbox()
-            stage_results["3.1"] = True
-        except Exception:
-            stage_results["3.1"] = False
-
-        try:
-            from fabric.registry.tool_registry import get_tool_registry
-
-            get_tool_registry()
-            stage_results["3.2"] = True
-        except Exception:
-            stage_results["3.2"] = False
-
-        try:
-            from fabric.registry.memory_store import get_memory_store
-
-            get_memory_store()
-            stage_results["3.3"] = True
-        except Exception:
-            stage_results["3.3"] = False
-
-        try:
-            from fabric.registry.orchestrator_core import get_self_healing_orchestrator
-
-            get_self_healing_orchestrator()
-            stage_results["3.4"] = True
-        except Exception:
-            stage_results["3.4"] = False
-
-        try:
-            from fabric.registry.evidence_chain import get_evidence_chain
-
-            get_evidence_chain()
-            stage_results["4.1"] = True
-        except Exception:
-            stage_results["4.1"] = False
-
-        try:
-            from fabric.registry.governance_engine import get_governance_engine
-
-            get_governance_engine()
-            stage_results["4.2"] = True
-        except Exception:
-            stage_results["4.2"] = False
-
-        try:
-            from fabric.registry.apex_core import get_apex_core
-
-            get_apex_core()
-            stage_results["4.3"] = True
-        except Exception:
-            stage_results["4.3"] = False
-
-        try:
-            from fabric.registry.api_gateway import get_api_gateway
-
-            get_api_gateway()
-            stage_results["5.1"] = True
-        except Exception:
-            stage_results["5.1"] = False
-
-        try:
-            from fabric.registry.observability import get_observability
-
-            get_observability()
-            stage_results["5.2"] = True
-        except Exception:
-            stage_results["5.2"] = False
-
-        try:
-            from fabric.registry.release_manager import get_release_manager
-
-            get_release_manager()
-            stage_results["5.3"] = True
-        except Exception:
-            stage_results["5.3"] = False
-
-        try:
-            from fabric.registry.multi_model_orchestrator import get_multi_model_orchestrator
-
-            get_multi_model_orchestrator()
-            stage_results["6.1"] = True
-        except Exception:
-            stage_results["6.1"] = False
-
-        try:
-            from fabric.registry.advanced_cache import get_advanced_cache
-
-            get_advanced_cache()
-            stage_results["6.2"] = True
-        except Exception:
-            stage_results["6.2"] = False
-
-        stage_results["6.3"] = True
+        sweep = run_stage_sweep(
+            start="2.4",
+            end="6.3",
+            actor=actor,
+            tenant_id=tenant_id,
+            mode="wiring",
+        )
+        stage_results: Dict[str, bool] = dict(sweep["stages"])
 
         all_ok = all(stage_results.values())
         report = {

@@ -21,6 +21,7 @@ from fabric.registry.research_engine import ResearchEngine
 from fabric.registry.registry_loader import get_registry
 from fabric.registry.sandbox import SecureSandbox
 from fabric.registry.worker import ExecutionWorker, TaskStatus
+from fabric.registry.state_root import get_state_root, state_dir
 
 STAGE_VERIFY_PATHS = {
     "1.4": "/phase1/stage1.4/verify",
@@ -150,7 +151,7 @@ def build_stage15_verify_payload() -> dict[str, Any]:
         checks,
         {
             "sandbox_root": str(files.root),
-            "canonical_root": "/tmp/mona_sandbox",
+            "canonical_root": str(get_state_root()),
             "stats": files.stats(),
             "traversal_error": traversal_error,
         },
