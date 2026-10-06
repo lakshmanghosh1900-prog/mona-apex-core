@@ -62,13 +62,13 @@ class Settings:
     telegram_bot_token: str = field(default_factory=lambda: _env("TELEGRAM_BOT_TOKEN"))
     telegram_admin_chat_id: str = field(default_factory=lambda: _env("TELEGRAM_ADMIN_CHAT_ID"))
     telegram_timeout: int = field(default_factory=lambda: _int("TELEGRAM_APPROVAL_TIMEOUT", 300))
-    telegram_auto_approve: bool = field(default_factory=lambda: _bool("TELEGRAM_AUTO_APPROVE", True))
+    telegram_auto_approve: bool = field(default_factory=lambda: _bool("TELEGRAM_AUTO_APPROVE", False))
 
     max_heal_attempts: int = field(default_factory=lambda: _int("MAX_HEAL_ATTEMPTS", 3))
     use_langgraph: bool = field(default_factory=lambda: _bool("USE_LANGGRAPH", True))
     llm_timeout: float = field(default_factory=lambda: _float("LLM_TIMEOUT", 45.0))
     llm_max_retries: int = field(default_factory=lambda: _int("LLM_MAX_RETRIES", 3))
-    cors_origins: str = field(default_factory=lambda: _env("CORS_ORIGINS", "*"))
+    cors_origins: str = field(default_factory=lambda: _env("CORS_ORIGINS", ""))
 
     @property
     def telegram_enabled(self) -> bool:

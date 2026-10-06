@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from fabric.registry.auth import AuthError, ROLE_LEVELS, get_auth_service
@@ -13,6 +14,20 @@ from fabric.registry.registry_loader import get_registry
 
 VERIFY_21_PATH = "/phase2/stage2.1/verify"
 CANONICAL_SPEC = "MONA — Powered by Apex Core"
+
+_bearer = HTTPBearer(auto_error=True)
+
+
+def require_auth(creds: HTTPAuthorizationCredentials = Depends(_bearer)):
+    """FPA-01: enforce a valid bearer token on sensitive routes."""
+    auth = get_auth_service()
+    try:
+        ctx = auth.verify_token(creds.credentials)
+    except AuthError as exc:
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if not ctx:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return ctx
 
 
 class TokenIn(BaseModel):

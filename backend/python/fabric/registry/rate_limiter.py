@@ -1,7 +1,8 @@
+from fabric.registry.state_root import state_dir
 import time, pathlib, re, json
 from typing import Dict, List, Optional
 
-RATE_ROOT = pathlib.Path("/tmp/mona_sandbox/rate_limits")
+RATE_ROOT = state_dir("rate_limits")
 RATE_ROOT.mkdir(parents=True, exist_ok=True)
 
 # Default limits: tool -> (max_req, window_sec)

@@ -45,7 +45,10 @@ def test_exec_5_exec_root_exists(sb):
 
 
 def test_exec_6_tool_invoke_registered(sb):
-    r = sb.invoke_tool("browser.search", {"q": "mona apex"}, actor="test_user", tenant_id="tenant1")
+    from fabric.registry.tenant_isolation import get_tenant_manager
+
+    get_tenant_manager().create_tenant_workspace("exec_tool_tenant", "test_user", "User")
+    r = sb.invoke_tool("browser.search", {"q": "mona apex"}, actor="test_user", tenant_id="exec_tool_tenant")
     assert r["success"] is True
     assert r["tool"] == "browser.search"
     assert r["canonical_spec"] == "MONA - Powered by Apex Core"
@@ -53,7 +56,10 @@ def test_exec_6_tool_invoke_registered(sb):
 
 
 def test_exec_7_unknown_tool_rejected(sb):
-    r = sb.invoke_tool("unknown.evil", {}, actor="test_user", tenant_id="tenant1")
+    from fabric.registry.tenant_isolation import get_tenant_manager
+
+    get_tenant_manager().create_tenant_workspace("exec_tool_tenant", "test_user", "User")
+    r = sb.invoke_tool("unknown.evil", {}, actor="test_user", tenant_id="exec_tool_tenant")
     assert r["success"] is False
     assert "not registered" in r["reason"]
 

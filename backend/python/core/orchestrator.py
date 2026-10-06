@@ -555,7 +555,7 @@ async def build_graph(orchestrator: SelfHealingOrchestrator):
 
 
 def describe_error(exc: BaseException) -> dict[str, str]:
-    return {"type": type(exc).__name__, "message": str(exc), "traceback": traceback.format_exc()[-2000:]}
+    return {"type": type(exc).__name__, "message": str(exc)}
 
 
 def elapsed(started: float) -> float:

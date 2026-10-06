@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from fabric.registry.state_root import state_dir
+
 import json
 import os
 import pathlib
@@ -7,7 +9,7 @@ import re
 import time
 from typing import Any, Dict, Optional
 
-TENANT_ROOT = pathlib.Path("/tmp/mona_sandbox/tenants")
+TENANT_ROOT = state_dir("tenants")
 TENANT_ROOT.mkdir(parents=True, exist_ok=True)
 
 TENANT_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-]{3,64}$")
@@ -21,6 +23,31 @@ class TenantIsolationManager:
         self.tenants: Dict[str, Dict] = {}  # tenant_id -> {created_by, created_at, actors: set}
         self.actor_tenants: Dict[str, set] = {}  # actor -> set(tenant_ids)
         self._audit: Optional[Any] = None
+        self._hydrate_from_disk()
+
+    def _hydrate_from_disk(self) -> None:
+        """FPA-02: reload tenant registry from disk markers on process start."""
+        try:
+            if not TENANT_ROOT.exists():
+                return
+            for marker in sorted(TENANT_ROOT.glob("*/.tenant")):
+                try:
+                    data = json.loads(marker.read_text(encoding="utf-8"))
+                    tid = data.get("tenant_id") or marker.parent.name
+                    creator = data.get("created_by", "system")
+                    if tid and tid not in self.tenants:
+                        self.tenants[tid] = {
+                            "created_by": creator,
+                            "created_at": data.get("created_at", time.time()),
+                            "actors": set(),
+                        }
+                    if tid and creator:
+                        self.tenants[tid]["actors"].add(creator)
+                        self.actor_tenants.setdefault(creator, set()).add(tid)
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
     def _get_audit(self) -> Optional[Any]:
         # Single canonical audit engine: fabric.registry.audit_logger.
@@ -207,8 +234,10 @@ class TenantIsolationManager:
                 # User can only access tenants they belong to
                 allowed_tenants = self.actor_tenants.get(actor, set())
                 if tenant_id not in allowed_tenants and tenant_id != actor and actor not in ["admin", "system"]:
-                    # If tenant doesn't exist yet, allow creation but not access to other's data?
-                    # For User, deny if exists and not in allowed
+                    # Deny only when the tenant exists and is owned by someone else.
+                    # If the tenant does not exist yet, claim-on-first-use: the
+                    # first User to touch it becomes the owner (gate S6) so later
+                    # accesses by other Users are denied.
                     if tenant_id in self.tenants and tenant_id not in allowed_tenants:
                         res = {
                             "allowed": False,
@@ -229,6 +258,26 @@ class TenantIsolationManager:
                                 policy_decision="DENY",
                             )
                         return res
+                    # Claim-on-first-use (S6): register ownership so the tenant
+                    # is no longer free-for-all after the first touch.
+                    if tenant_id not in self.tenants:
+                        self.tenants[tenant_id] = {
+                            "created_by": actor,
+                            "created_at": time.time(),
+                            "actors": set(),
+                        }
+                    self.tenants[tenant_id]["actors"].add(actor)
+                    self.actor_tenants.setdefault(actor, set()).add(tenant_id)
+                    if audit:
+                        audit.log(
+                            "tenant.claim",
+                            actor,
+                            role,
+                            {"tenant_id": tenant_id, "resource": resource_path},
+                            {"success": True, "claimed_by": actor, "tenant_id": tenant_id},
+                            approved=True,
+                            policy_decision="ALLOW",
+                        )
 
             # Allowed
             res = {

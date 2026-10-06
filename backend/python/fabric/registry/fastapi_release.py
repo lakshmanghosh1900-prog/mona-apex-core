@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from typing import Any, Dict, Optional
-import traceback
+import logging
+
+from fabric.registry.fastapi_security import require_auth
 
 router = APIRouter()
 
@@ -69,7 +71,6 @@ def verify_stage_5_1():
             "status": f"ERROR: {ex}",
             "all_checks": False,
             "error": str(ex),
-            "traceback": traceback.format_exc(),
             "checks": checks,
             "canonical_spec": CANONICAL_SPEC,
         }
@@ -125,7 +126,6 @@ def verify_stage_5_2():
             "status": f"ERROR: {ex}",
             "all_checks": False,
             "error": str(ex),
-            "traceback": traceback.format_exc(),
             "checks": checks,
             "canonical_spec": CANONICAL_SPEC,
         }
@@ -174,7 +174,6 @@ def verify_stage_5_3():
             "status": f"ERROR: {ex}",
             "all_checks": False,
             "error": str(ex),
-            "traceback": traceback.format_exc(),
             "checks": checks,
             "canonical_spec": CANONICAL_SPEC,
         }
@@ -268,9 +267,9 @@ async def verify_phase5_mega() -> Dict[str, Any]:
 
     # 3.4 orchestration & self-heal
     try:
-        from fabric.registry.orchestrator_core import get_self_healing_orchestrator
+        from fabric.registry.orchestrator_core import get_staged_orchestrator
 
-        orch = get_self_healing_orchestrator()
+        orch = get_staged_orchestrator()
         r = orch.execute("test", actor="mega5", tenant_id="mega5")
         results["3.4"] = r.get("canonical_spec") == CANONICAL_SPEC
         details["3.4"] = f"runs={orch.get_stats()['total_runs']}"
@@ -369,13 +368,16 @@ async def verify_phase5_mega() -> Dict[str, Any]:
 
 
 @router.post("/release/create")
-def release_create(version: str = Query("1.0.0-production"), actor: str = Query("system"), tenant_id: str = Query("default")):
+def release_create(version: str = Query("1.0.0-production"), actor: str = Query("system"), tenant_id: str = Query("default"), ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.release_manager import get_release_manager
 
-        return get_release_manager().create_release(version=version, actor=actor, tenant_id=tenant_id)
-    except Exception as e:
-        return {"success": False, "error": str(e), "canonical_spec": CANONICAL_SPEC}
+        return get_release_manager().create_release(version=version, actor=ctx.subject if ctx else actor, tenant_id=tenant_id)
+    except Exception:
+        import logging
+
+        logging.exception("Error in release/create")
+        return {"success": False, "error": "Internal error — check server logs", "canonical_spec": CANONICAL_SPEC}
 
 
 @router.get("/release/history")
@@ -384,8 +386,9 @@ def release_history(limit: int = Query(20, ge=1, le=200)):
         from fabric.registry.release_manager import get_release_manager
 
         return get_release_manager().get_releases(limit=limit)
-    except Exception as e:
-        return {"error": str(e), "canonical_spec": CANONICAL_SPEC}
+    except Exception:
+        logging.exception("Error in release/history")
+        return {"error": "Internal error — check server logs", "canonical_spec": CANONICAL_SPEC}
 
 
 @router.get("/release/stats")
@@ -394,8 +397,9 @@ def release_stats():
         from fabric.registry.release_manager import get_release_manager
 
         return get_release_manager().get_stats()
-    except Exception as e:
-        return {"error": str(e), "canonical_spec": CANONICAL_SPEC}
+    except Exception:
+        logging.exception("Error in release/stats")
+        return {"error": "Internal error — check server logs", "canonical_spec": CANONICAL_SPEC}
 
 
 @router.get("/gateway/routes")
@@ -404,18 +408,22 @@ def gateway_routes(tenant_id: Optional[str] = Query(None)):
         from fabric.registry.api_gateway import get_api_gateway
 
         return get_api_gateway().get_routes(tenant_id=tenant_id)
-    except Exception as e:
-        return {"error": str(e), "canonical_spec": CANONICAL_SPEC}
+    except Exception:
+        logging.exception("Error in gateway/routes")
+        return {"error": "Internal error — check server logs", "canonical_spec": CANONICAL_SPEC}
 
 
 @router.post("/gateway/register")
-def gateway_register(path: str = Query(...), method: str = Query("GET"), tenant_id: str = Query("default")):
+def gateway_register(path: str = Query(...), method: str = Query("GET"), tenant_id: str = Query("default"), ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.api_gateway import get_api_gateway
 
         return get_api_gateway().register_route(path, method, tenant_id=tenant_id)
-    except Exception as e:
-        return {"success": False, "error": str(e), "canonical_spec": CANONICAL_SPEC}
+    except Exception:
+        import logging
+
+        logging.exception("Error in gateway/register")
+        return {"success": False, "error": "Internal error — check server logs", "canonical_spec": CANONICAL_SPEC}
 
 
 @router.get("/gateway/stats")
@@ -424,8 +432,9 @@ def gateway_stats():
         from fabric.registry.api_gateway import get_api_gateway
 
         return get_api_gateway().get_stats()
-    except Exception as e:
-        return {"error": str(e), "canonical_spec": CANONICAL_SPEC}
+    except Exception:
+        logging.exception("Error in gateway/stats")
+        return {"error": "Internal error — check server logs", "canonical_spec": CANONICAL_SPEC}
 
 
 @router.get("/observability/metrics")
@@ -434,8 +443,9 @@ def observability_metrics(name: Optional[str] = Query(None), limit: int = Query(
         from fabric.registry.observability import get_observability
 
         return get_observability().get_metrics(name=name, limit=limit)
-    except Exception as e:
-        return {"error": str(e), "canonical_spec": CANONICAL_SPEC}
+    except Exception:
+        logging.exception("Error in observability/metrics")
+        return {"error": "Internal error — check server logs", "canonical_spec": CANONICAL_SPEC}
 
 
 @router.get("/observability/health")

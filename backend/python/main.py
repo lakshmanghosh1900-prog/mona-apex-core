@@ -69,10 +69,12 @@ async def lifespan(_: FastAPI):
         await approval.stop()
 
 
-app = FastAPI(title="MONA Apex Core", version="Phase 5 FULL", lifespan=lifespan)
+app = FastAPI(title="MONA Apex Core", version="Phase 8 FPA", lifespan=lifespan)
+# FPA-04: never default to wildcard CORS — explicit origins only.
+_cors_origins = settings.origin_list or ["http://localhost:3000", "http://localhost:5173"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.origin_list or ["*"],
+    allow_origins=_cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,7 +1,8 @@
 import time, json, pathlib, hashlib, re
 from typing import Dict, List, Any, Optional
+from fabric.registry.state_root import state_dir
 
-AUDIT_ROOT = pathlib.Path("/tmp/mona_sandbox/audit")
+AUDIT_ROOT = state_dir("audit")
 AUDIT_ROOT.mkdir(parents=True, exist_ok=True)
 
 SECRET_PATTERNS = [r'GROQ_API_KEY\s*[=:]\s*[^\s"]+', r'GEMINI_API_KEY\s*[=:]\s*[^\s"]+', r'TELEGRAM_BOT_TOKEN\s*[=:]\s*[^\s"]+', r'"GROQ_API_KEY"\s*:\s*"[^"]*"', r'"GEMINI_API_KEY"\s*:\s*"[^"]*"', r'"TELEGRAM_BOT_TOKEN"\s*:\s*"[^"]*"', r"\b\d{8,10}:[A-Za-z0-9_\-]{20,}", r"GROQ_API_KEY", r"GEMINI_API_KEY", r"TELEGRAM_BOT_TOKEN", r"sk-[a-zA-Z0-9]{20,}", r"gsk_[a-zA-Z0-9]{8,}"]
@@ -50,6 +51,23 @@ class AuditLogger:
     def __init__(self):
         self.logs: List[Dict] = []
         self.chain = EvidenceChain()
+        self._hydrate_from_disk()
+
+    def _hydrate_from_disk(self) -> None:
+        """FPA-02: reload recent audit entries from disk on process start."""
+        try:
+            if not AUDIT_ROOT.exists():
+                return
+            files = sorted(AUDIT_ROOT.glob("ev_*.json"))[-1000:]
+            for f in files:
+                try:
+                    data = json.loads(f.read_text(encoding="utf-8"))
+                    if isinstance(data, dict):
+                        self.logs.append(data)
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
     def log(self, tool_name: str, actor: str, role: str, inputs: Dict, result: Dict, approved: bool = True, policy_decision: str = "ALLOW") -> Dict:
         # Scrub secrets from inputs for storage

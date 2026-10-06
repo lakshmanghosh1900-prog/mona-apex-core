@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import logging
 import pathlib
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+
+from fabric.registry.fastapi_security import require_auth
 
 router = APIRouter()
 
 CANONICAL_SPEC = "MONA - Powered by Apex Core"
 VERIFY_26_PATH = "/phase2/stage2.6/verify"
 MEGA_VERIFY_PATH = "/phase2/mega/verify"
+
+ALLOWED_TENANT_ROLES = {"User", "Operator", "Admin", "Owner"}
 
 
 def build_stage26_verify_payload() -> dict[str, Any]:
@@ -130,7 +135,6 @@ def build_stage26_verify_payload() -> dict[str, Any]:
             "status": f"❌ ERROR: {ex}",
             "all_checks": False,
             "error": str(ex),
-            "traceback": traceback.format_exc(),
             "checks": checks,
             "passed": sum(1 for v in checks.values() if v),
             "failed": len(checks) - sum(1 for v in checks.values() if v),
@@ -271,13 +275,17 @@ def verify_stage_2_6() -> dict[str, Any]:
 
 
 @router.post("/tenants/create")
-def create_tenant(tenant_id: str = Query(...), actor: str = Query(...), role: str = Query("User")) -> dict[str, Any]:
+def create_tenant(tenant_id: str = Query(...), actor: str = Query(...), role: str = Query("User"), ctx: Any = Depends(require_auth)) -> dict[str, Any]:
+    # FPA-04: role must be an allowed value — no self-declared arbitrary roles.
+    if role not in ALLOWED_TENANT_ROLES:
+        return {"success": False, "error": f"Invalid role: {role}", "allowed_roles": sorted(ALLOWED_TENANT_ROLES), "canonical_spec": CANONICAL_SPEC}
     try:
         from fabric.registry.tenant_isolation import get_tenant_manager
 
-        return get_tenant_manager().create_tenant_workspace(tenant_id, actor, role)
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+        return get_tenant_manager().create_tenant_workspace(tenant_id, ctx.subject if ctx else actor, role)
+    except Exception:
+        logging.exception("Error in tenants/create")
+        return {"success": False, "error": "Internal error — check server logs", "canonical_spec": CANONICAL_SPEC}
 
 
 @router.get("/tenants/list")
@@ -286,8 +294,9 @@ def list_tenants(actor: str = Query(...), role: str = Query("User")) -> dict[str
         from fabric.registry.tenant_isolation import get_tenant_manager
 
         return get_tenant_manager().list_tenants(actor, role)
-    except Exception as e:
-        return {"error": str(e), "tenants": [], "count": 0}
+    except Exception:
+        logging.exception("Error in tenants/list")
+        return {"error": "Internal error — check server logs", "tenants": [], "count": 0}
 
 
 @router.get("/tenants/{tenant_id}/enforce")
@@ -301,8 +310,9 @@ def enforce_tenant(
         from fabric.registry.tenant_isolation import get_tenant_manager
 
         return get_tenant_manager().enforce_isolation(actor, role, tenant_id, resource)
-    except Exception as e:
-        return {"allowed": False, "error": str(e)}
+    except Exception:
+        logging.exception("Error in tenants/enforce")
+        return {"allowed": False, "error": "Internal error — check server logs"}
 
 
 @router.get("/tenants/stats")
@@ -311,8 +321,9 @@ def tenant_stats() -> dict[str, Any]:
         from fabric.registry.tenant_isolation import get_tenant_manager
 
         return get_tenant_manager().get_stats()
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        logging.exception("Error in tenants/stats")
+        return {"error": "Internal error — check server logs"}
 
 
 @router.get(MEGA_VERIFY_PATH)

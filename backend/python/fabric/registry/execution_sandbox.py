@@ -1,9 +1,10 @@
+from fabric.registry.state_root import state_dir
 import time, pathlib, re, json, ast, sys, traceback
 from typing import Dict, List, Optional, Any
 import io
 import contextlib
 
-EXEC_ROOT = pathlib.Path("/tmp/mona_sandbox/execution")
+EXEC_ROOT = state_dir("execution")
 EXEC_ROOT.mkdir(parents=True, exist_ok=True)
 
 # Blocked modules and builtins for safe execution
@@ -12,6 +13,24 @@ BLOCKED_BUILTINS = {"eval", "exec", "compile", "__import__", "open", "input", "e
 BLOCKED_PATTERNS = [r"os\.system", r"subprocess", r"socket\.", r"__import__", r"eval\(", r"exec\("]
 
 class ExecutionSandbox:
+    """Canonical production sandbox engine (gate D4).
+
+    ALL production code execution flows through this class: orchestrator_core
+    (DoD chain), apex_core, release_manager, and the phase 3-7 fastapi mega
+    endpoints. It provides in-process AST sanitization, governed-tool lookup,
+    rate limiting, tenant-isolation enforcement, and audit logging.
+
+    ``fabric.registry.sandbox.SecureSandbox`` is NOT a second production
+    engine — it is the Stage 1.7 isolation-verification harness whose
+    subprocess semantics (child pid, timeout kill, env scrub, confined
+    writes) are required by ``verify_isolation``. Production task execution
+    must never route through SecureSandbox.
+    """
+
+    # Ownership marker (D4): distinguishes the canonical production engine
+    # from the verification harness.
+    CANONICAL_ROLE = "production"
+
     def __init__(self):
         self.exec_history: List[Dict] = []
         self.tool_registry: Dict[str, Dict] = {
@@ -147,11 +166,10 @@ class ExecutionSandbox:
             return result
         except Exception as e:
             elapsed = time.time() - start
-            tb = traceback.format_exc()
             result = {
                 "success": False,
                 "reason": str(e),
-                "traceback": tb[:1000],
+                "error_type": type(e).__name__,
                 "output": output_buffer.getvalue(),
                 "elapsed": elapsed,
                 "actor": actor,

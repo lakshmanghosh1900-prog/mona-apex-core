@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from fabric.registry.execution_sandbox import EXEC_ROOT, get_execution_sandbox
+from fabric.registry.fastapi_security import require_auth
 
 router = APIRouter()
 
@@ -124,25 +125,25 @@ def verify_stage_3_1():
 
 
 @router.post("/execution/python")
-def execute_python(req: ExecRequest):
+def execute_python(req: ExecRequest, ctx: Any = Depends(require_auth)):
     sb = get_execution_sandbox()
-    result = sb.execute_python(req.code, actor=req.actor, tenant_id=req.tenant_id, timeout=req.timeout)
+    result = sb.execute_python(req.code, actor=ctx.subject if ctx else req.actor, tenant_id=req.tenant_id, timeout=req.timeout)
     result["canonical_spec"] = CANONICAL_SPEC
     result["dod_ref"] = DOD_REF
     return result
 
 
 @router.post("/execution/tool")
-def execute_tool(req: ToolRequest):
+def execute_tool(req: ToolRequest, ctx: Any = Depends(require_auth)):
     sb = get_execution_sandbox()
     # role/approved are deliberately NOT accepted from the request body: a caller
     # must not be able to self-declare Admin or self-approve a HIGH-risk tool.
     result = sb.invoke_tool(
         req.tool,
         req.params,
-        actor=req.actor,
+        actor=ctx.subject if ctx else req.actor,
         tenant_id=req.tenant_id,
-        role="User",
+        role=ctx.role if ctx else "User",
         approved=False,
     )
     result["canonical_spec"] = CANONICAL_SPEC
