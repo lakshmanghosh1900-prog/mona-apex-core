@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import traceback
 from typing import Any, Dict, Optional
-
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+
+from fabric.registry.fastapi_security import require_auth
 
 router = APIRouter()
 
@@ -269,7 +270,7 @@ def verify_stage_4_3():
 
 
 @router.post("/apex/run")
-def apex_run(req: ApexRunRequest):
+def apex_run(req: ApexRunRequest, ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.apex_core import get_apex_core
 

@@ -1,5 +1,7 @@
-﻿from fastapi import APIRouter, Query
-from typing import Dict, Optional
+﻿from typing import Any, Dict, Optional
+from fastapi import APIRouter, Depends, Query
+
+from fabric.registry.fastapi_security import require_auth
 import time
 import traceback
 
@@ -210,7 +212,7 @@ def enterprise_select_model(task: str = Query(...), preferred: Optional[str] = Q
 
 
 @router.post("/enterprise/cache/set")
-def enterprise_cache_set(key: str = Query(...), value: str = Query(...), ttl: int = Query(3600, ge=1), tenant_id: str = Query("default")):
+def enterprise_cache_set(key: str = Query(...), value: str = Query(...), ttl: int = Query(3600, ge=1), tenant_id: str = Query("default"), ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.advanced_cache import get_advanced_cache
 
@@ -230,7 +232,7 @@ def enterprise_cache_get(key: str, tenant_id: str = Query("default")):
 
 
 @router.post("/enterprise/audit/event")
-def enterprise_audit_event(event: str = Query(...), actor: str = Query("api"), tenant_id: str = Query("default"), severity: str = Query("INFO")):
+def enterprise_audit_event(event: str = Query(...), actor: str = Query("api"), tenant_id: str = Query("default"), severity: str = Query("INFO"), ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.enterprise_audit import get_enterprise_audit
 

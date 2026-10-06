@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Query
-from typing import Optional
+from typing import Any, Optional
+from fastapi import APIRouter, Depends, Query
+
+from fabric.registry.fastapi_security import require_auth
 
 router = APIRouter()
 
@@ -121,7 +123,7 @@ def rate_check(actor: str = Query(...), tool: str = Query(...), tenant_id: str =
         return {"allowed": False, "error": str(e)}
 
 @router.post("/rate-limit/record")
-def rate_record(actor: str = Query(...), tool: str = Query(...), tenant_id: str = Query("default")):
+def rate_record(actor: str = Query(...), tool: str = Query(...), tenant_id: str = Query("default"), ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.rate_limiter import get_rate_limiter
         rl = get_rate_limiter()

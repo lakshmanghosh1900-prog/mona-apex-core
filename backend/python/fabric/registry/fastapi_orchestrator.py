@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import traceback
 from typing import Any, Dict, Optional
-
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+
+from fabric.registry.fastapi_security import require_auth
 
 router = APIRouter()
 
@@ -105,7 +106,7 @@ def verify_stage_3_4():
 
 
 @router.post("/orchestrate/run")
-def orchestrate_run(req: OrchestrateRequest):
+def orchestrate_run(req: OrchestrateRequest, ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.orchestrator_core import get_staged_orchestrator
 

@@ -1,5 +1,7 @@
-﻿from fastapi import APIRouter, Query
+﻿from fastapi import APIRouter, Depends, Query
 from typing import Any, Dict, Optional
+
+from fabric.registry.fastapi_security import require_auth
 import logging
 import os
 
@@ -251,7 +253,7 @@ def verify_stage_7_3():
 
 
 @router.post("/deploy/create")
-def deploy_create(version: str = Query(...), env: str = Query("production"), actor: str = Query("api")):
+def deploy_create(version: str = Query(...), env: str = Query("production"), actor: str = Query("api"), ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.deployment_manager import get_deployment_manager
 
@@ -261,7 +263,7 @@ def deploy_create(version: str = Query(...), env: str = Query("production"), act
 
 
 @router.post("/cicd/pipeline/create")
-def cicd_pipeline_create(name: str = Query(...), stages: Optional[str] = Query(None), actor: str = Query("api")):
+def cicd_pipeline_create(name: str = Query(...), stages: Optional[str] = Query(None), actor: str = Query("api"), ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.cicd_manager import get_cicd_manager
 
@@ -272,7 +274,7 @@ def cicd_pipeline_create(name: str = Query(...), stages: Optional[str] = Query(N
 
 
 @router.post("/cicd/k8s/generate")
-def cicd_k8s_generate(service: str = Query(...), replicas: int = Query(3, ge=1, le=50), image: str = Query("mona-apex-core:latest"), actor: str = Query("api")):
+def cicd_k8s_generate(service: str = Query(...), replicas: int = Query(3, ge=1, le=50), image: str = Query("mona-apex-core:latest"), actor: str = Query("api"), ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.cicd_manager import get_cicd_manager
 

@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Query
-from typing import Optional
+from typing import Any, Optional
+from fastapi import APIRouter, Depends, Query
+
+from fabric.registry.fastapi_security import require_auth
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -108,7 +110,7 @@ def verify_stage_3_2():
 
 
 @router.post("/tools/register")
-def register_tool(req: RegisterRequest):
+def register_tool(req: RegisterRequest, ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.tool_registry import get_tool_registry
         tr = get_tool_registry()

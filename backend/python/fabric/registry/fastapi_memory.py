@@ -3,8 +3,10 @@ from __future__ import annotations
 import traceback
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+
+from fabric.registry.fastapi_security import require_auth
 
 router = APIRouter()
 
@@ -139,7 +141,7 @@ def verify_stage_3_3():
 
 
 @router.post("/memories/save")
-def memory_save(req: MemoryRequest):
+def memory_save(req: MemoryRequest, ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.memory_store import get_memory_store
 
@@ -169,7 +171,7 @@ def memory_recall(q: str = Query(...), tenant_id: Optional[str] = Query(None), l
 
 
 @router.post("/memories/evidence")
-def memory_evidence(req: MemoryRequest):
+def memory_evidence(req: MemoryRequest, ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.memory_store import get_memory_store
 
@@ -179,7 +181,7 @@ def memory_evidence(req: MemoryRequest):
 
 
 @router.post("/memories/report")
-def memory_report(req: ReportRequest):
+def memory_report(req: ReportRequest, ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.memory_store import get_memory_store
 
@@ -189,7 +191,7 @@ def memory_report(req: ReportRequest):
 
 
 @router.post("/memories/resume/queue")
-def memory_resume_queue(req: ResumeRequest):
+def memory_resume_queue(req: ResumeRequest, ctx: Any = Depends(require_auth)):
     try:
         from fabric.registry.memory_store import get_memory_store
 
