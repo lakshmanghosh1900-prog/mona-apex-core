@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
@@ -26,6 +26,7 @@ from fabric.registry.fastapi_rate_limit import router as rate_router
 from fabric.registry.fastapi_execution import router as execution_router
 from fabric.registry.fastapi_tool_registry import router as tool_registry_router
 from fabric.registry.fastapi_memory import router as memory_router
+from fabric.routes_metrics import router as metrics_router
 from fabric.registry.fastapi_orchestrator import router as orchestrator_router
 
 # Phase 4 - Apex Core
@@ -73,7 +74,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="MONA Apex Core", version="Phase 8 FPA + Command Center v2", lifespan=lifespan)
-# FPA-04: never default to wildcard CORS — explicit origins only.
+# FPA-04: never default to wildcard CORS â€” explicit origins only.
 _cors_origins = settings.origin_list or ["http://localhost:3000", "http://localhost:5173"]
 app.add_middleware(
     CORSMiddleware,
@@ -237,6 +238,7 @@ app.include_router(tenant_router)
 app.include_router(audit_router)
 app.include_router(approval_router)
 app.include_router(memory_router)  # old LongTermMemory routes - /memory/remember, /memory/recall etc
+app.include_router(metrics_router)
 app.include_router(orchestrator_router)
 app.include_router(apex_router)
 app.include_router(release_router)
@@ -328,3 +330,6 @@ async def resolve(record_id: str, payload: ResolveIn) -> dict[str, Any]:
     if not approval.resolve_locally(record_id, payload.approved, resolved_by="api"):
         raise HTTPException(status_code=404, detail="pending approval not found")
     return {"id": record_id, "approved": payload.approved}
+
+
+
