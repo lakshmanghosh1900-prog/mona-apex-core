@@ -209,7 +209,8 @@ export default function MonaCommandCenter() {
             <div>
               <h1 className="text-[13px] font-black tracking-widest">MONA APEX CORE - COMMAND CENTER</h1>
               <p className="text-[9px] text-zinc-500">
-                v2.0.0-enterprise-final | d5f68f3 | {health?.env ? `env=${health.env}` : "env=--"}
+                {health?.version ?? "v2.2.0-observability"} | {health?.branch ?? "main 643c104"} |{" "}
+                {health?.env ? `env=${health.env}` : "env=--"}
               </p>
             </div>
           </div>

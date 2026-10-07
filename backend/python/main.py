@@ -43,6 +43,7 @@ from fabric.registry.fastapi_deploy import router as deploy_router
 
 # NEW: Command Center MemoryStore (zero-cost)
 from fabric.registry.memory_store import get_memory_store
+from fabric.app_version import APP_BRANCH, APP_VERSION
 
 memory = LongTermMemory()
 approval = TelegramApprovalGate()
@@ -138,6 +139,8 @@ async def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "service": "mona-apex-core",
+        "version": APP_VERSION,
+        "branch": APP_BRANCH,
         "env": settings.env,
         "memory": memory.stats(),
         "telegram": {"enabled": approval.enabled, "pending": len(approval.queue())},
@@ -216,8 +219,8 @@ def command_center_overview() -> Dict[str, Any]:
     mem = get_memory_store()
     return {
         "backend": "mona-apex-core",
-        "version": "v2.0.0-enterprise-final",
-        "branch": "prod-hardening d5f68f3",
+        "version": APP_VERSION,
+        "branch": APP_BRANCH,
         "memory": mem.get_stats(),
         "memories": mem.list_memories(limit=5),
         "canonical_spec": "MONA - Powered by Apex Core",

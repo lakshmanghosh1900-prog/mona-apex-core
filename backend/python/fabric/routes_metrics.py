@@ -2,6 +2,8 @@
 from fastapi.responses import PlainTextResponse
 import pathlib, os
 
+from fabric.app_version import APP_BRANCH, APP_VERSION
+
 router = APIRouter(tags=["Observability"])
 
 @router.get("/metrics", response_class=PlainTextResponse)
@@ -50,7 +52,7 @@ def prometheus_metrics():
         out.append(f"mona_sandbox_disk_bytes {disk_bytes}")
         out.append("# HELP mona_info MONA info")
         out.append("# TYPE mona_info gauge")
-        out.append('mona_info{version="v2.1.0-command-center-v2",branch="main 44dfc6f",phase7="20/20",phase8="5/5"} 1')
+        out.append(f'mona_info{{version="{APP_VERSION}",branch="{APP_BRANCH}",phase7="20/20",phase8="5/5"}} 1')
         return "\n".join(out)
     except Exception as e:
         return f"# Error: {e}\nmona_memories_total 7\nmona_evidence_total 233\n"
@@ -59,4 +61,4 @@ def prometheus_metrics():
 def health():
     from fabric.registry.memory_store import get_memory_store
     s = get_memory_store().get_stats()
-    return {"status":"ok","version":"v2.1.0-command-center-v2","branch":"main 44dfc6f","memory":s}
+    return {"status":"ok","version":APP_VERSION,"branch":APP_BRANCH,"memory":s}
