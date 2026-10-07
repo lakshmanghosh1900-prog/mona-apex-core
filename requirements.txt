@@ -1,0 +1,16 @@
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+pydantic>=2.7,<3.0
+httpx>=0.27,<1.0
+python-dotenv>=1.0,<2.0
+
+# graph engine
+langgraph>=0.2,<1.0
+langchain-core>=0.3,<1.0
+
+# long-term memory
+qdrant-client>=1.9,<2.0
+# mem0ai>=0.1,<2.0   # optional cloud hybrid, needs MEM0_API_KEY
+
+# tests (Stage 1.1+)
+pytest>=8,<9

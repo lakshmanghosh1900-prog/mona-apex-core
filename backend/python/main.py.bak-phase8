@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
-from typing import Any, Optional, Dict
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,9 +40,6 @@ from fabric.registry.fastapi_enterprise import router as enterprise_router
 # Phase 7 - Deployment & Ops
 from fabric.registry.fastapi_deploy import router as deploy_router
 
-# NEW: Command Center MemoryStore (zero-cost)
-from fabric.registry.memory_store import get_memory_store
-
 memory = LongTermMemory()
 approval = TelegramApprovalGate()
 orchestrator = SelfHealingOrchestrator(approval=approval, memory=memory)
@@ -72,7 +69,7 @@ async def lifespan(_: FastAPI):
         await approval.stop()
 
 
-app = FastAPI(title="MONA Apex Core", version="Phase 8 FPA + Command Center v2", lifespan=lifespan)
+app = FastAPI(title="MONA Apex Core", version="Phase 8 FPA", lifespan=lifespan)
 # FPA-04: never default to wildcard CORS — explicit origins only.
 _cors_origins = settings.origin_list or ["http://localhost:3000", "http://localhost:5173"]
 app.add_middleware(
@@ -114,20 +111,6 @@ class ResolveIn(BaseModel):
     approved: bool
 
 
-# --- Command Center UI Models (fixes MEMORIES [0] issue) ---
-class CommandCenterMemorySave(BaseModel):
-    key: str = Field(min_length=2, max_length=128)
-    value: Dict[str, Any]
-    actor: str = "ui-user"
-    tenant_id: str = "default"
-
-class CommandCenterEvidenceSave(BaseModel):
-    task_id: str = Field(min_length=1)
-    evidence: Dict[str, Any]
-    actor: str = "ui-user"
-    tenant_id: str = "default"
-
-
 def _sse(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, default=str)}\n\n"
 
@@ -154,77 +137,6 @@ async def agents() -> dict[str, Any]:
     return {"agents": [a.__dict__ for a in orchestrator.registry.all()]}
 
 
-# ============================================================
-# FIX: Command Center API - exposes memory_store.py
-# This fixes "Backend is online but /memory/stats is not exposed"
-# Must be defined BEFORE include_router(memory_router) to avoid /memory/{id} collision
-# ============================================================
-@app.get("/memory/stats")
-def command_center_memory_stats() -> Dict[str, Any]:
-    """Returns total_memories, total_evidence, total_reports, resume_queue_len"""
-    return get_memory_store().get_stats()
-
-@app.get("/memory/list")
-def command_center_memory_list(limit: int = 20, tenant_id: Optional[str] = None) -> Dict[str, Any]:
-    """Returns list_memories() - shows mona_phase7_verify (mem_8f773dbdacd6) etc"""
-    return get_memory_store().list_memories(tenant_id=tenant_id, limit=limit)
-
-@app.get("/memory/get/{key}")
-def command_center_memory_get(key: str, tenant_id: str = "default") -> Dict[str, Any]:
-    return get_memory_store().get_memory(key=key, tenant_id=tenant_id)
-
-@app.post("/memory/save")
-def command_center_memory_save(payload: CommandCenterMemorySave) -> Dict[str, Any]:
-    """Called from Command Center UI SAVE MEMORY button - POST /memory/save"""
-    return get_memory_store().save_memory(
-        key=payload.key,
-        value=payload.value,
-        actor=payload.actor,
-        tenant_id=payload.tenant_id
-    )
-
-@app.get("/evidence/stats")
-def command_center_evidence_stats() -> Dict[str, Any]:
-    store = get_memory_store()
-    return {
-        "total_evidence": len(store.evidence),
-        "total_reports": len(store.reports),
-        "resume_queue_len": len(store.resume_queue),
-        "canonical_spec": "MONA - Powered by Apex Core",
-        "zero_cost": True
-    }
-
-@app.get("/evidence/list")
-def command_center_evidence_list(limit: int = 20) -> Dict[str, Any]:
-    store = get_memory_store()
-    items = list(store.evidence.values())[-limit:]
-    return {"count": len(items), "evidence": items, "canonical_spec": "MONA - Powered by Apex Core"}
-
-@app.post("/evidence/save")
-def command_center_evidence_save(payload: CommandCenterEvidenceSave) -> Dict[str, Any]:
-    return get_memory_store().save_evidence(
-        task_id=payload.task_id,
-        evidence=payload.evidence,
-        actor=payload.actor,
-        tenant_id=payload.tenant_id
-    )
-
-@app.get("/command-center/overview")
-def command_center_overview() -> Dict[str, Any]:
-    """Aggregated endpoint for Command Center UI - one call gets all"""
-    mem = get_memory_store()
-    return {
-        "backend": "mona-apex-core",
-        "version": "v2.0.0-enterprise-final",
-        "branch": "prod-hardening d5f68f3",
-        "memory": mem.get_stats(),
-        "memories": mem.list_memories(limit=5),
-        "canonical_spec": "MONA - Powered by Apex Core",
-        "zero_cost": True
-    }
-
-
-# Existing routers - keep after Command Center routes to avoid collision with /memory/{memory_id}
 app.include_router(tool_registry_router)
 app.include_router(build_router(mesh_specs=orchestrator.mesh.specs))
 app.include_router(build_browser_router())
@@ -236,7 +148,7 @@ app.include_router(rate_router)
 app.include_router(tenant_router)
 app.include_router(audit_router)
 app.include_router(approval_router)
-app.include_router(memory_router)  # old LongTermMemory routes - /memory/remember, /memory/recall etc
+app.include_router(memory_router)
 app.include_router(orchestrator_router)
 app.include_router(apex_router)
 app.include_router(release_router)

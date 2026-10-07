@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: mona-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: mona_production
+      POSTGRES_USER: mona_user
+      POSTGRES_PASSWORD: secure_postgres_password_change_me
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mona-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: mona-redis
+    restart: always
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    networks:
+      - mona-net
+
+  mona-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: mona-backend-prod
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=production
+      - PORT=8000
+      - MONA_STORAGE_BACKEND=postgres
+      - MONA_POSTGRES_DSN=postgresql://mona_user:secure_postgres_password_change_me@postgres:5432/mona_production
+      - MONA_REDIS_URL=redis://redis:6379/0
+      - CORS_ORIGINS=https://yourdomain.com
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - mona_state:/app/state
+    networks:
+      - mona-net
+
+volumes:
+  postgres_data:
+  redis_data:
+  mona_state:
+
+networks:
+  mona-net:
+    driver: bridge
